@@ -84,7 +84,7 @@ func TestAlerts(t *testing.T) {
 	if d := alerts[3]; d.Kind != "ban" || !d.Manual {
 		t.Errorf("ban manuel : %+v", d)
 	}
-	if e := alerts[4]; e.Kind != "alerte" {
+	if e := alerts[4]; e.Kind != "alert" {
 		t.Errorf("sans décision : %+v", e)
 	}
 }

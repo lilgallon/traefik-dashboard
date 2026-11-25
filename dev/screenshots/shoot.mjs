@@ -4,6 +4,8 @@ import { chromium } from 'playwright'
 
 const base = process.env.DASHBOARD_URL ?? 'http://localhost:18080'
 const out = process.env.OUT ?? '../../docs/screenshots'
+// Interface language of the screenshots (en or fr).
+const lang = process.env.SCREENSHOT_LANG === 'fr' ? 'fr' : 'en'
 
 // Wait until the backfill is over and the page shows data.
 async function waitReady(page) {
@@ -15,14 +17,15 @@ async function open(browser, { theme, window, hash = '', width = 1440, height = 
   const ctx = await browser.newContext({
     viewport: { width, height },
     deviceScaleFactor: 2,
-    locale: 'fr-FR',
-    timezoneId: 'Europe/Paris',
+    locale: lang === 'fr' ? 'fr-FR' : 'en-GB',
+    timezoneId: 'UTC',
     colorScheme: theme,
   })
-  await ctx.addInitScript(([t, w]) => {
+  await ctx.addInitScript(([t, w, l]) => {
     localStorage.setItem('td-theme', t)
     localStorage.setItem('td-window', w)
-  }, [theme, window])
+    localStorage.setItem('td-lang', l)
+  }, [theme, window, lang])
   const page = await ctx.newPage()
   await page.goto(base + '/' + hash)
   await waitReady(page)
@@ -55,7 +58,7 @@ const shots = [
   { file: 'overview-dark.png', theme: 'dark', window: '1h' },
   { file: 'ip-detail.png', theme: 'light', window: '24h', hash: '#ip=216.160.83.66' },
   { file: 'crowdsec.png', theme: 'light', window: '24h', selector: 'section[aria-labelledby="cs-title"]' },
-  { file: 'ips.png', theme: 'dark', window: '7d', selector: 'section.card:has(.segmented[aria-label="Filtrer les adresses"])' },
+  { file: 'ips.png', theme: 'dark', window: '7d', selector: 'section.card:has(th.vcol)' },
 ]
 for (const s of shots) {
   const { ctx, page } = await open(browser, s)
@@ -65,7 +68,7 @@ for (const s of shots) {
   } else {
     await page.screenshot({ path })
   }
-  console.log('écrit', path)
+  console.log('wrote', path)
   await ctx.close()
 }
 await browser.close()

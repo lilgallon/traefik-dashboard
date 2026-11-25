@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { Summary } from '../lib/api'
   import { formatCount, formatMs } from '../lib/format'
+  import { t } from '../lib/i18n.svelte'
 
   let { summary, busy }: { summary: Summary | null; busy: boolean } = $props()
 
@@ -10,21 +11,21 @@
 <section class="card" class:busy>
   <header class="card-head">
     <div>
-      <h2 class="card-title">Services</h2>
-      <p class="card-sub">routers Traefik · temps de réponse au 95ᵉ centile</p>
+      <h2 class="card-title">{t('services.title')}</h2>
+      <p class="card-sub">{t('services.sub')}</p>
     </div>
   </header>
   {#if !summary}
     <div class="sk-rows">{#each Array(5) as _, i (i)}<span class="skeleton"></span>{/each}</div>
   {:else if summary.services.length === 0}
-    <p class="empty">Aucune requête sur la période.</p>
+    <p class="empty">{t('common.noRequests')}</p>
   {:else}
     <div class="table-scroll">
       <table class="tbl">
         <thead>
           <tr>
-            <th scope="col">Router</th>
-            <th scope="col" class="num">Requêtes</th>
+            <th scope="col">{t('services.router')}</th>
+            <th scope="col" class="num">{t('urls.requests')}</th>
             <th scope="col" class="num">5xx</th>
             <th scope="col" class="num">p95</th>
           </tr>
@@ -33,7 +34,7 @@
           {#each summary.services as s (s.router)}
             <tr>
               <td>
-                <span class="name" class:none={s.router.startsWith('(')}>{s.router === '(aucun)' ? 'aucun router' : s.router}</span>
+                <span class="name" class:none={s.router.startsWith('(')}>{s.router === '(none)' ? t('services.noRouter') : s.router}</span>
                 <span class="meter" aria-hidden="true"><i style:width="{Math.max(1.5, (s.requests / max) * 100)}%"></i></span>
               </td>
               <td class="num strong">{formatCount(s.requests)}</td>

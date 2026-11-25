@@ -7,7 +7,6 @@ package main
 import (
 	"context"
 	"errors"
-	"fmt"
 	"io/fs"
 	"log"
 	"net/http"
@@ -27,6 +26,7 @@ import (
 	"github.com/lilgallon/traefik-dashboard/internal/api"
 	"github.com/lilgallon/traefik-dashboard/internal/crowdsec"
 	"github.com/lilgallon/traefik-dashboard/internal/geo"
+	"github.com/lilgallon/traefik-dashboard/internal/i18n"
 	"github.com/lilgallon/traefik-dashboard/internal/logline"
 	"github.com/lilgallon/traefik-dashboard/internal/names"
 	"github.com/lilgallon/traefik-dashboard/internal/store"
@@ -49,8 +49,8 @@ type state struct {
 	mu          sync.RWMutex
 	bans        map[netip.Addr]store.Ban
 	bansErr     error
-	listIssues  []string
-	fixed       []string // avertissements posés une fois au démarrage
+	listIssues  []i18n.Msg
+	fixed       []i18n.Msg // avertissements posés une fois au démarrage
 	backfillErr string
 }
 
@@ -88,12 +88,19 @@ func main() {
 		tgChat       = os.Getenv("TELEGRAM_CHAT_ID")
 		publicURL    = env("PUBLIC_URL", "http://192.168.1.2:8080")
 		dailyAt      = env("DAILY_AT", "08:00")
+		langSetting  = env("LANGUAGE", "en") // notifications, et page sans Accept-Language connu
 		startedAt    = time.Now()
 		st           = store.New()
 		shared       = &state{}
 		ready        atomic.Bool
 		skippedLines atomic.Int64
 	)
+
+	lang, ok := i18n.Parse(langSetting)
+	if !ok {
+		log.Printf("LANGUAGE=%q not supported (en, fr): using en", langSetting)
+		lang = i18n.EN
+	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
@@ -103,8 +110,8 @@ func main() {
 	geoOK := true
 	if db, err := geo.Open(geoCity, geoASN); err != nil {
 		geoOK = false
-		log.Printf("géolocalisation indisponible : %v", err)
-		shared.fixed = append(shared.fixed, "Bases GeoLite2 illisibles : pays et opérateurs ne sont pas affichés, les règles par ASN ne s'appliquent pas, et les alertes Telegram sont suspendues pour ne pas alerter à tort.")
+		log.Printf("geolocation unavailable: %v", err)
+		shared.fixed = append(shared.fixed, i18n.M("warn.geo"))
 	} else {
 		defer db.Close()
 		lookup = db
@@ -113,7 +120,7 @@ func main() {
 	// ── Règles de noms ──────────────────────────────────────────────────────────
 	rules, err := names.NewReloader(namesFile)
 	if err != nil {
-		log.Printf("names.yaml : %v", err)
+		log.Printf("names.yaml: %v", err)
 	}
 	classify := func(e logline.Entry) store.Identity {
 		g := lookup.Lookup(e.IP)
@@ -140,7 +147,7 @@ func main() {
 		return src
 	}
 	checkLists := func() {
-		var issues []string
+		var issues []i18n.Msg
 		if rules.Loaded() {
 			issues = names.CheckLists(rules.Rules(), readSource(csWhitelist), readSource(dynamicFile))
 		}
@@ -156,12 +163,12 @@ func main() {
 		notifier = alert.NewAsync(alert.NewTelegram(tgToken, tgChat).WithBaseURL(os.Getenv("TELEGRAM_API_URL")), log.Printf)
 	} else {
 		notifier = alert.Log{Logf: log.Printf}
-		shared.fixed = append(shared.fixed, "Telegram n'est pas configuré (TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID) : aucune alerte ne part.")
+		shared.fixed = append(shared.fixed, i18n.M("warn.telegram_off"))
 	}
 	if err := os.MkdirAll(stateDir, 0o755); err != nil {
-		log.Printf("dossier d'état : %v", err)
+		log.Printf("state directory: %v", err)
 	}
-	watcher := alert.NewWatcher(notifier, filepath.Join(stateDir, "alerts.json"), publicURL)
+	watcher := alert.NewWatcher(notifier, filepath.Join(stateDir, "alerts.json"), publicURL, lang)
 
 	// ── CrowdSec : lecture des bans, et blocage depuis la page ──────────────────
 	cs := crowdsec.NewClient(lapiURL, bouncerKey)
@@ -170,7 +177,7 @@ func main() {
 		defer cancel()
 		bans, err := cs.Bans(c)
 		if _, prevErr := shared.getBans(); err != nil && prevErr == nil {
-			log.Printf("CrowdSec : %v", err)
+			log.Printf("CrowdSec: %v", err)
 		}
 		shared.setBans(bans, err)
 	}
@@ -193,7 +200,7 @@ func main() {
 		defer cancel()
 		alerts, err := csWriter.Alerts(c, since)
 		if err != nil {
-			log.Printf("alertes CrowdSec : %v", err)
+			log.Printf("CrowdSec alerts: %v", err)
 		}
 		feed.SetAlerts(alerts, full, err, time.Now())
 		if full && err == nil {
@@ -205,7 +212,7 @@ func main() {
 		defer cancel()
 		b, err := cs.Blocklist(c)
 		if err != nil {
-			log.Printf("blocklist CrowdSec : %v", err)
+			log.Printf("CrowdSec blocklist: %v", err)
 			return
 		}
 		feed.SetBlocklist(b)
@@ -216,21 +223,21 @@ func main() {
 			refreshAlerts(false)
 		}}
 	} else {
-		log.Printf("blocage et alertes CrowdSec désactivés : CROWDSEC_MACHINE_PASSWORD absent")
+		log.Printf("CrowdSec bans and alerts disabled: CROWDSEC_MACHINE_PASSWORD not set")
 	}
-	protected := func(ip netip.Addr) string {
+	protected := func(ip netip.Addr) i18n.Msg {
 		switch {
 		case !ip.IsGlobalUnicast() || ip.IsPrivate():
-			return "Adresse privée ou réservée : un ban ne servirait à rien et pourrait couper le réseau local."
+			return i18n.M("ban.private")
 		}
 		if rules.Loaded() {
 			if name := rules.Rules().NamedIP(ip); name != "" {
-				return fmt.Sprintf("IP nommée « %s » dans names.yaml : retirer d'abord la règle pour pouvoir la bannir.", name)
+				return i18n.M("ban.named", name)
 			}
 		} else {
-			return "names.yaml n'est pas chargé : impossible de vérifier que cette IP n'est pas de confiance."
+			return i18n.M("ban.names_not_loaded")
 		}
-		return ""
+		return i18n.Msg{}
 	}
 	var allowedHosts []string
 	if u, err := url.Parse(publicURL); err == nil && u.Host != "" {
@@ -255,6 +262,7 @@ func main() {
 		StartedAt:    startedAt,
 		Blocker:      blocker,
 		Protected:    protected,
+		Lang:         lang,
 		AllowedHosts: allowedHosts,
 		CrowdSec: func(from, to time.Time) *crowdsec.View {
 			bans, _ := shared.getBans()
@@ -262,24 +270,22 @@ func main() {
 			return &v
 		},
 		IPAlerts: feed.ForIP,
-		Warnings: func() []string {
+		Warnings: func() []i18n.Msg {
 			shared.mu.RLock()
 			defer shared.mu.RUnlock()
-			out := append([]string(nil), shared.fixed...)
+			out := append([]i18n.Msg(nil), shared.fixed...)
 			if err := rules.Err(); err != nil {
-				msg := "names.yaml est invalide"
 				if rules.Loaded() {
-					msg += " : les règles précédentes restent appliquées"
+					out = append(out, i18n.M("warn.names_invalid_kept", err))
 				} else {
-					msg += " : aucune IP n'est nommée, et les alertes de succès sont suspendues"
+					out = append(out, i18n.M("warn.names_invalid_none", err))
 				}
-				out = append(out, fmt.Sprintf("%s (%v).", msg, err))
 			}
 			for _, issue := range shared.listIssues {
-				out = append(out, "Listes de confiance : "+issue+".")
+				out = append(out, i18n.M("warn.lists", issue))
 			}
 			if shared.backfillErr != "" {
-				out = append(out, "Relecture incomplète des archives : "+shared.backfillErr)
+				out = append(out, i18n.M("warn.backfill", shared.backfillErr))
 			}
 			return out
 		},
@@ -294,9 +300,9 @@ func main() {
 		// Pas de WriteTimeout : le flux SSE reste ouvert (échéance posée par écriture).
 	}
 	go func() {
-		log.Printf("écoute sur %s", listen)
+		log.Printf("listening on %s", listen)
 		if err := httpSrv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			log.Fatalf("serveur HTTP : %v", err)
+			log.Fatalf("HTTP server: %v", err)
 		}
 	}()
 
@@ -337,7 +343,7 @@ func main() {
 			st.Add(e, classify(e))
 		})
 		if err != nil {
-			log.Printf("relecture des archives : %v", err)
+			log.Printf("archive backfill: %v", err)
 			shared.mu.Lock()
 			shared.backfillErr = err.Error()
 			shared.mu.Unlock()
@@ -352,7 +358,7 @@ func main() {
 		var ms runtime.MemStats
 		runtime.ReadMemStats(&ms)
 		stats := st.Stats()
-		log.Printf("relecture terminée en %s : %d lignes gardées, %d illisibles, %d minutes, %d cellules, tas %d Mo",
+		log.Printf("backfill done in %s: %d lines kept, %d unreadable, %d minutes, %d cells, heap %d MB",
 			time.Since(startedAt).Round(time.Millisecond), kept, skippedLines.Load(), stats.Minutes, stats.Cells, ms.HeapAlloc>>20)
 
 		err = tail.Follow(ctx, filepath.Join(logDir, "access.log"), offset, func(line []byte) {
@@ -370,7 +376,7 @@ func main() {
 			}
 		})
 		if err != nil && !errors.Is(err, context.Canceled) {
-			log.Printf("suivi de access.log : %v", err)
+			log.Printf("following access.log: %v", err)
 		}
 	}()
 
@@ -378,10 +384,10 @@ func main() {
 	every(10*time.Second, func() {
 		changed, err := rules.Poll()
 		if err != nil && changed {
-			log.Printf("names.yaml : %v", err)
+			log.Printf("names.yaml: %v", err)
 		}
 		if changed {
-			log.Printf("names.yaml rechargé : recalcul des verdicts")
+			log.Printf("names.yaml reloaded: recomputing verdicts")
 			st.Reclassify(classify)
 		}
 		checkLists()
@@ -405,12 +411,12 @@ func main() {
 	go func() {
 		defer wg.Done()
 		alert.RunDaily(ctx, dailyAt, func() string {
-			return alert.DailyText(srv.Summary(store.W24h), publicURL)
+			return alert.DailyText(srv.Summary(store.W24h), publicURL, lang)
 		}, notifier)
 	}()
 
 	<-ctx.Done()
-	log.Printf("arrêt")
+	log.Printf("shutting down")
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	srv.Close()
@@ -428,10 +434,10 @@ type banner struct {
 
 func (b *banner) Ban(ctx context.Context, ip netip.Addr, d time.Duration, reason, by string) error {
 	if err := b.w.Ban(ctx, ip, d, reason); err != nil {
-		log.Printf("ban de %s refusé : %v", ip, err)
+		log.Printf("ban of %s refused: %v", ip, err)
 		return err
 	}
-	log.Printf("ban de %s pour %s demandé par %s (%s)", ip, d, by, reason)
+	log.Printf("ban of %s for %s requested by %s (%s)", ip, d, by, reason)
 	b.refresh()
 	return nil
 }
@@ -439,10 +445,10 @@ func (b *banner) Ban(ctx context.Context, ip netip.Addr, d time.Duration, reason
 func (b *banner) Unban(ctx context.Context, ip netip.Addr, by string) (int, error) {
 	n, err := b.w.Unban(ctx, ip)
 	if err != nil {
-		log.Printf("levée du ban de %s refusée : %v", ip, err)
+		log.Printf("unban of %s refused: %v", ip, err)
 		return 0, err
 	}
-	log.Printf("ban de %s levé (%d décisions) par %s", ip, n, by)
+	log.Printf("ban of %s lifted (%d decisions) by %s", ip, n, by)
 	b.refresh()
 	return n, nil
 }

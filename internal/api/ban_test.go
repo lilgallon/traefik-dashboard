@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/lilgallon/traefik-dashboard/internal/crowdsec"
+	"github.com/lilgallon/traefik-dashboard/internal/i18n"
 )
 
 type fakeBlocker struct {
@@ -41,11 +42,11 @@ func blockServer(t *testing.T, b Blocker) *Server {
 	s, _ := newServer(t, func(c *Config) {
 		c.Blocker = b
 		c.AllowedHosts = []string{"192.168.1.2:8080"}
-		c.Protected = func(ip netip.Addr) string {
+		c.Protected = func(ip netip.Addr) i18n.Msg {
 			if ip == netip.MustParseAddr("203.0.113.10") {
-				return "nommée Maison"
+				return i18n.M("ban.named", "Maison")
 			}
-			return ""
+			return i18n.Msg{}
 		}
 	})
 	return s
@@ -81,7 +82,7 @@ func TestBan(t *testing.T) {
 	if rec.Code != 200 {
 		t.Fatalf("HTTP %d : %s", rec.Code, rec.Body)
 	}
-	if len(b.banned) != 1 || b.banned[0] != "198.51.100.1 24h0m0s manuel (tableau de bord) : scan wp-admin 192.168.1.20" {
+	if len(b.banned) != 1 || b.banned[0] != "198.51.100.1 24h0m0s manual (dashboard): scan wp-admin 192.168.1.20" {
 		t.Errorf("bans : %q", b.banned)
 	}
 	rec = write(s, http.MethodDelete, "/api/ip/198.51.100.1/ban", "")
@@ -124,7 +125,7 @@ func TestBanDisabledAndFailing(t *testing.T) {
 	}
 	var got struct{ Block blockState }
 	json.Unmarshal(get(t, s, "/api/ip/203.0.113.10?window=1h").Body.Bytes(), &got)
-	if got.Block.Enabled || got.Block.Refused != "nommée Maison" {
+	if got.Block.Enabled || !strings.Contains(got.Block.Refused, "“Maison”") {
 		t.Errorf("état du blocage : %+v", got.Block)
 	}
 

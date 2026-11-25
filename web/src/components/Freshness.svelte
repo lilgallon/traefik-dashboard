@@ -1,5 +1,6 @@
 <script lang="ts">
   import { ago } from '../lib/format'
+  import { t } from '../lib/i18n.svelte'
   import type { DataState } from '../lib/model'
 
   let { mode, connected, lastLine, now }: { mode: DataState; connected: boolean; lastLine: string; now: Date } = $props()
@@ -7,17 +8,17 @@
   const view = $derived.by(() => {
     switch (mode) {
       case 'loading':
-        return { tone: 'idle', label: 'Chargement…', detail: '' }
+        return { tone: 'idle', label: t('fresh.loading'), detail: '' }
       case 'offline':
-        return { tone: 'bad', label: 'Hors ligne', detail: 'tableau de bord injoignable' }
+        return { tone: 'bad', label: t('fresh.offline'), detail: t('fresh.offlineDetail') }
       case 'backfill':
-        return { tone: 'idle', label: 'Relecture des journaux…', detail: '' }
+        return { tone: 'idle', label: t('fresh.backfill'), detail: '' }
       case 'stale':
-        return { tone: 'bad', label: 'Données en retard', detail: `dernière ligne ${ago(lastLine, now)}` }
+        return { tone: 'bad', label: t('fresh.stale'), detail: t('fresh.lastLine', { ago: ago(lastLine, now) }) }
       default:
         return connected
-          ? { tone: 'live', label: 'En direct', detail: `dernière ligne ${ago(lastLine, now)}` }
-          : { tone: 'warn', label: 'Flux interrompu', detail: `reconnexion… dernière ligne ${ago(lastLine, now)}` }
+          ? { tone: 'live', label: t('fresh.live'), detail: t('fresh.lastLine', { ago: ago(lastLine, now) }) }
+          : { tone: 'warn', label: t('fresh.interrupted'), detail: t('fresh.reconnect', { ago: ago(lastLine, now) }) }
     }
   })
 </script>

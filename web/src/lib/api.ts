@@ -1,3 +1,5 @@
+import { lang, t } from './i18n.svelte'
+
 // Types et appels de l'API du service (mêmes noms de champs que le JSON Go).
 
 export type Window = '1h' | '24h' | '7d'
@@ -24,7 +26,7 @@ export function periodQuery(p: Period): string {
 export type StatusClass = '1xx' | '2xx' | '3xx' | '4xx' | '5xx' | 'abandon'
 export type ClassCounts = Record<StatusClass, number>
 
-export type VerdictKind = 'connue' | 'succès' | 'public' | 'bloquée' | 'tâtonne' | 'autre'
+export type VerdictKind = 'known' | 'success' | 'public' | 'blocked' | 'probing' | 'other'
 
 export interface Offender {
   ip: string
@@ -99,7 +101,7 @@ export interface SensitiveHit {
 }
 
 /** Alerte CrowdSec locale (scénario, WAF ou ban manuel). */
-export type AlertKind = 'ban' | 'waf' | 'alerte'
+export type AlertKind = 'ban' | 'waf' | 'alert'
 export interface CsAlert {
   id: number
   at: string
@@ -196,12 +198,11 @@ export interface IpDetail extends IpRow {
 }
 
 export type BanDuration = '4h' | '24h' | '7d' | '30d'
-export const BAN_DURATIONS: { value: BanDuration; label: string }[] = [
-  { value: '4h', label: '4 h' },
-  { value: '24h', label: '24 h' },
-  { value: '7d', label: '7 jours' },
-  { value: '30d', label: '30 jours' },
-]
+export const BAN_DURATIONS: BanDuration[] = ['4h', '24h', '7d', '30d']
+
+export function banDurationLabel(d: BanDuration): string {
+  return t(`duration.${d}`)
+}
 
 /** Une des dernières requêtes lues (bloc « en direct »). */
 export interface Hit {
@@ -234,9 +235,14 @@ export interface LiveTick {
   hits?: Hit[]
 }
 
+/** En-têtes de lecture : la langue choisie dans la page, pour les messages du service. */
+function readHeaders(): Record<string, string> {
+  return { Accept: 'application/json', 'Accept-Language': lang() }
+}
+
 async function getJson<T>(url: string): Promise<T> {
-  const res = await fetch(url, { headers: { Accept: 'application/json' }, cache: 'no-store' })
-  if (!res.ok) throw new Error(`Le tableau de bord a répondu ${res.status}`)
+  const res = await fetch(url, { headers: readHeaders(), cache: 'no-store' })
+  if (!res.ok) throw new Error(t('api.httpError', { status: res.status }))
   return (await res.json()) as T
 }
 
@@ -247,11 +253,11 @@ export function fetchSummary(p: Period): Promise<Summary> {
 /** null si l'IP n'a aucune requête sur la période. */
 export async function fetchIp(ip: string, p: Period): Promise<IpDetail | null> {
   const res = await fetch(`/api/ip/${encodeURIComponent(ip)}?${periodQuery(p)}`, {
-    headers: { Accept: 'application/json' },
+    headers: readHeaders(),
     cache: 'no-store',
   })
   if (res.status === 404) return null
-  if (!res.ok) throw new Error(`Le tableau de bord a répondu ${res.status}`)
+  if (!res.ok) throw new Error(t('api.httpError', { status: res.status }))
   return (await res.json()) as IpDetail
 }
 
@@ -259,12 +265,12 @@ export async function fetchIp(ip: string, p: Period): Promise<IpDetail | null> {
 async function write(method: 'POST' | 'DELETE', url: string, body?: unknown): Promise<void> {
   const res = await fetch(url, {
     method,
-    headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-Traefik-Dashboard': '1' },
+    headers: { ...readHeaders(), 'Content-Type': 'application/json', 'X-Traefik-Dashboard': '1' },
     body: body === undefined ? undefined : JSON.stringify(body),
     cache: 'no-store',
   })
   if (!res.ok) {
-    let msg = `Le tableau de bord a répondu ${res.status}`
+    let msg = t('api.httpError', { status: res.status })
     try {
       const j = (await res.json()) as { error?: string }
       if (j.error) msg = j.error

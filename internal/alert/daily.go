@@ -4,47 +4,13 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"strconv"
 	"strings"
 	"time"
 
+	"github.com/lilgallon/traefik-dashboard/internal/i18n"
 	"github.com/lilgallon/traefik-dashboard/internal/logline"
 	"github.com/lilgallon/traefik-dashboard/internal/store"
 )
-
-// thousands : 110742 → "110 742".
-func thousands(n int64) string {
-	s := strconv.FormatInt(n, 10)
-	if len(s) <= 3 {
-		return s
-	}
-	var b strings.Builder
-	head := len(s) % 3
-	if head > 0 {
-		b.WriteString(s[:head])
-	}
-	for i := head; i < len(s); i += 3 {
-		if b.Len() > 0 {
-			b.WriteByte(' ')
-		}
-		b.WriteString(s[i : i+3])
-	}
-	return b.String()
-}
-
-func bytesFR(n int64) string {
-	units := []string{"o", "Ko", "Mo", "Go", "To"}
-	v := float64(n)
-	i := 0
-	for v >= 1024 && i < len(units)-1 {
-		v /= 1024
-		i++
-	}
-	if i == 0 {
-		return fmt.Sprintf("%d o", n)
-	}
-	return strings.Replace(strconv.FormatFloat(v, 'f', 1, 64), ".", ",", 1) + " " + units[i]
-}
 
 func total(c store.ClassCounts) (t int64) {
 	for _, v := range c {
@@ -54,43 +20,43 @@ func total(c store.ClassCounts) (t int64) {
 }
 
 // DailyText compose le résumé quotidien à partir du résumé « 24 h ».
-func DailyText(s store.Summary, publicURL string) string {
+func DailyText(s store.Summary, publicURL string, l i18n.Lang) string {
 	var b strings.Builder
-	b.WriteString("📊 <b>Traefik — dernières 24 h</b>\n\n")
+	b.WriteString(i18n.T(l, "daily.title") + "\n\n")
 
 	if s.Verdict.Red {
-		fmt.Fprintf(&b, "🔴 <b>%d IP inconnue(s) ont obtenu un succès</b>\n", len(s.Verdict.Offenders))
+		n := len(s.Verdict.Offenders)
+		b.WriteString(i18n.N(l, "daily.red", int64(n), n) + "\n")
 		for i, o := range s.Verdict.Offenders {
 			if i == 5 {
-				fmt.Fprintf(&b, "  … et %d autre(s)\n", len(s.Verdict.Offenders)-5)
+				b.WriteString(i18n.T(l, "daily.more", n-5) + "\n")
 				break
 			}
 			url := ""
 			if len(o.URLs) > 0 {
 				url = " → " + esc(o.URLs[0])
 			}
-			fmt.Fprintf(&b, "  • <code>%s</code> %s : %d succès%s\n", esc(o.IP), esc(strings.TrimSpace(o.Country+" "+o.Org)), o.Count, url)
+			b.WriteString(i18n.N(l, "daily.offender", o.Count, esc(o.IP), esc(strings.TrimSpace(o.Country+" "+o.Org)), o.Count, url) + "\n")
 		}
 	} else {
-		b.WriteString("🟢 Aucune IP inconnue n'a obtenu de succès\n")
+		b.WriteString(i18n.T(l, "daily.green") + "\n")
 	}
 
 	k := s.KPIs
-	fmt.Fprintf(&b, "\nRequêtes : %s (moy. %s req/s, pic %d)\n", thousands(total(k.ByClass)),
-		strings.Replace(strconv.FormatFloat(k.AvgRPS, 'f', 1, 64), ".", ",", 1), int64(k.PeakRPS))
+	b.WriteString("\n" + i18n.T(l, "daily.requests", i18n.Thousands(l, total(k.ByClass)), i18n.Decimal(l, k.AvgRPS), int64(k.PeakRPS)) + "\n")
 	var st []string
 	for _, c := range logline.Classes {
 		if n := k.ByClass[c]; n > 0 {
 			label := string(c)
 			if c == logline.ClassAbandon {
-				label = "abandons"
+				label = i18n.T(l, "daily.aborted")
 			}
-			st = append(st, label+" "+thousands(n))
+			st = append(st, label+" "+i18n.Thousands(l, n))
 		}
 	}
-	fmt.Fprintf(&b, "Statuts : %s\n", strings.Join(st, " · "))
-	fmt.Fprintf(&b, "Volume : %s entrants, %s sortants\n", bytesFR(k.BytesIn), bytesFR(k.BytesOut))
-	fmt.Fprintf(&b, "IP : %d nommées, %d IP non nommées\n\n", s.Counts.NamedIPs, s.Counts.UnknownIPs)
+	b.WriteString(i18n.T(l, "daily.statuses", strings.Join(st, " · ")) + "\n")
+	b.WriteString(i18n.T(l, "daily.volume", i18n.Bytes(l, k.BytesIn), i18n.Bytes(l, k.BytesOut)) + "\n")
+	b.WriteString(i18n.T(l, "daily.ips", s.Counts.NamedIPs, s.Counts.UnknownIPs) + "\n\n")
 
 	var with5xx []store.ServiceRow
 	for _, svc := range s.Services {
@@ -99,12 +65,12 @@ func DailyText(s store.Summary, publicURL string) string {
 		}
 	}
 	if len(with5xx) > 0 {
-		b.WriteString("⚠️ <b>5xx par router</b>\n")
+		b.WriteString(i18n.T(l, "daily.5xx_title") + "\n")
 		for _, svc := range with5xx {
-			fmt.Fprintf(&b, "  • %s : %d\n", esc(svc.Router), svc.Err5xx)
+			b.WriteString(i18n.T(l, "daily.5xx_line", esc(svc.Router), svc.Err5xx) + "\n")
 		}
 	} else {
-		b.WriteString("✅ Aucune erreur 5xx\n")
+		b.WriteString(i18n.T(l, "daily.no5xx") + "\n")
 	}
 
 	var shown int
@@ -113,7 +79,7 @@ func DailyText(s store.Summary, publicURL string) string {
 			continue
 		}
 		if shown == 0 {
-			b.WriteString("\n🌍 <b>Top IP non nommées</b>\n")
+			b.WriteString("\n" + i18n.T(l, "daily.top") + "\n")
 		}
 		if shown == 8 {
 			break
@@ -125,13 +91,14 @@ func DailyText(s store.Summary, publicURL string) string {
 		}
 		ban := ""
 		if r.Ban != nil {
-			ban = ", bannie (" + esc(r.Ban.Scenario) + ")"
+			ban = i18n.T(l, "daily.banned", esc(r.Ban.Scenario))
 		}
-		fmt.Fprintf(&b, "  • <code>%s</code>%s : %s req, %s%s\n", esc(r.IP), who, thousands(total(r.ByClass)), esc(r.Verdict), ban)
+		verdict := i18n.T(l, "verdict."+r.Verdict)
+		b.WriteString(i18n.T(l, "daily.ip_line", esc(r.IP), who, i18n.Thousands(l, total(r.ByClass)), esc(verdict), ban) + "\n")
 	}
 
 	if len(s.Sensitive) > 0 {
-		b.WriteString("\n🚨 <b>Chemins sensibles servis (2xx)</b>\n")
+		b.WriteString("\n" + i18n.T(l, "daily.sensitive") + "\n")
 		for i, h := range s.Sensitive {
 			if i == 8 {
 				break
@@ -141,12 +108,12 @@ func DailyText(s store.Summary, publicURL string) string {
 	}
 
 	if k.ActiveBans < 0 {
-		b.WriteString("\n🛡️ CrowdSec injoignable : bans en cours inconnus\n")
+		b.WriteString("\n" + i18n.T(l, "daily.cs_unreachable") + "\n")
 	} else {
-		fmt.Fprintf(&b, "\n🛡️ CrowdSec : %d ban(s) en cours\n", k.ActiveBans)
+		b.WriteString("\n" + i18n.N(l, "daily.cs_bans", int64(k.ActiveBans), k.ActiveBans) + "\n")
 	}
 
-	fmt.Fprintf(&b, "\n<a href=\"%s\">Ouvrir le tableau de bord</a>", esc(publicURL))
+	fmt.Fprintf(&b, "\n<a href=\"%s\">%s</a>", esc(publicURL), i18n.T(l, "tg.open"))
 	return b.String()
 }
 
@@ -154,7 +121,7 @@ func DailyText(s store.Summary, publicURL string) string {
 func nextRun(at string, now time.Time) (time.Time, error) {
 	t, err := time.Parse("15:04", at)
 	if err != nil {
-		return time.Time{}, fmt.Errorf("heure du résumé « %s » invalide (attendu HH:MM)", at)
+		return time.Time{}, fmt.Errorf("invalid daily summary time %q (expected HH:MM)", at)
 	}
 	now = now.UTC()
 	next := time.Date(now.Year(), now.Month(), now.Day(), t.Hour(), t.Minute(), 0, 0, time.UTC)
@@ -169,7 +136,7 @@ func RunDaily(ctx context.Context, at string, build func() string, n Notifier) {
 	for {
 		next, err := nextRun(at, time.Now())
 		if err != nil {
-			log.Printf("résumé quotidien désactivé : %v", err)
+			log.Printf("daily summary disabled: %v", err)
 			return
 		}
 		timer := time.NewTimer(time.Until(next))
@@ -180,7 +147,7 @@ func RunDaily(ctx context.Context, at string, build func() string, n Notifier) {
 		case <-timer.C:
 		}
 		if err := n.Send(ctx, build()); err != nil {
-			log.Printf("résumé quotidien non envoyé : %v", err)
+			log.Printf("daily summary not sent: %v", err)
 		}
 	}
 }

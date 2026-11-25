@@ -15,6 +15,7 @@ import (
 	"testing/fstest"
 	"time"
 
+	"github.com/lilgallon/traefik-dashboard/internal/i18n"
 	"github.com/lilgallon/traefik-dashboard/internal/logline"
 	"github.com/lilgallon/traefik-dashboard/internal/store"
 )
@@ -41,8 +42,8 @@ func newServer(t *testing.T, mod func(*Config)) (*Server, *store.Store) {
 				netip.MustParseAddr("203.0.113.1"):  {Scenario: "autre"},
 			}, nil
 		},
-		Warnings: func() []string {
-			return []string{"1.2.3.4/32 est dans dynamic.yml mais pas dans names.yaml (app-allowlist)"}
+		Warnings: func() []i18n.Msg {
+			return []i18n.Msg{i18n.M("warn.lists", i18n.M("lists.missing_in_names", "1.2.3.4/32", "dynamic.yml", "app-allowlist"))}
 		},
 		Static: fstest.MapFS{
 			"index.html":    {Data: []byte("<html>tableau</html>")},
@@ -100,10 +101,10 @@ func TestSummaryEndpoint(t *testing.T) {
 	if got.Window != "24h" || !got.Verdict.Red || len(got.Verdict.Offenders) != 1 {
 		t.Errorf("verdict : %+v", got.Verdict)
 	}
-	if got.IPs[0].Verdict != "connue" || got.IPs[0].Name != "Maison" || got.IPs[0].Ban != nil {
+	if got.IPs[0].Verdict != "known" || got.IPs[0].Name != "Maison" || got.IPs[0].Ban != nil {
 		t.Errorf("première ligne : %+v", got.IPs[0])
 	}
-	if got.IPs[1].Verdict != "succès" || got.IPs[1].Ban == nil || got.IPs[1].Ban.Scenario != "crowdsecurity/http-probing" {
+	if got.IPs[1].Verdict != "success" || got.IPs[1].Ban == nil || got.IPs[1].Ban.Scenario != "crowdsecurity/http-probing" {
 		t.Errorf("deuxième ligne : %+v", got.IPs[1])
 	}
 	if got.KPIs.ActiveBans != 2 || got.KPIs.ByClass["2xx"] != 2 {
@@ -174,14 +175,36 @@ func TestSummaryDegraded(t *testing.T) {
 		t.Errorf("avertissement CrowdSec absent : %v", got.Warnings)
 	}
 	// Pendant la relecture, pas d'avertissement « données en retard » (normal).
-	if strings.Contains(joined, "retard") {
+	if strings.Contains(joined, "late") {
 		t.Errorf("avertissement de retard pendant la relecture : %v", got.Warnings)
 	}
 
 	s, _ = newServer(t, func(c *Config) { c.Now = func() time.Time { return now.Add(20 * time.Minute) } })
 	rec = get(t, s, "/api/summary?window=1h")
-	if !strings.Contains(rec.Body.String(), "retard") {
+	if !strings.Contains(rec.Body.String(), "Data is late") {
 		t.Errorf("avertissement de retard absent : %s", rec.Body)
+	}
+}
+
+// La langue suit Accept-Language, puis la langue du service.
+func TestLanguage(t *testing.T) {
+	s, _ := newServer(t, nil)
+	var got struct{ Warnings []string }
+	json.Unmarshal(get(t, s, "/api/summary?window=1h").Body.Bytes(), &got)
+	if len(got.Warnings) != 1 || got.Warnings[0] != "Trust lists: 1.2.3.4/32 is in dynamic.yml but not in names.yaml (app-allowlist)." {
+		t.Errorf("en : %q", got.Warnings)
+	}
+	json.Unmarshal(get(t, s, "/api/summary?window=1h", "Accept-Language", "fr-FR,fr;q=0.9").Body.Bytes(), &got)
+	if len(got.Warnings) != 1 || !strings.HasPrefix(got.Warnings[0], "Listes de confiance : 1.2.3.4/32 est dans dynamic.yml") {
+		t.Errorf("fr : %q", got.Warnings)
+	}
+	if rec := get(t, s, "/api/summary?window=2h", "Accept-Language", "fr"); !strings.Contains(rec.Body.String(), "période inconnue") {
+		t.Errorf("erreur fr : %s", rec.Body)
+	}
+
+	s, _ = newServer(t, func(c *Config) { c.Lang = i18n.FR })
+	if rec := get(t, s, "/api/summary?window=2h", "Accept-Language", "de"); !strings.Contains(rec.Body.String(), "période inconnue") {
+		t.Errorf("langue du service : %s", rec.Body)
 	}
 }
 
@@ -198,7 +221,7 @@ func TestIPEndpoint(t *testing.T) {
 		Routers     map[string]int64
 	}
 	json.Unmarshal(rec.Body.Bytes(), &got)
-	if got.IP != "198.51.100.1" || got.Verdict != "succès" || got.Ban == nil || len(got.URLs) != 1 || got.Routers["homeassistant"] != 1 {
+	if got.IP != "198.51.100.1" || got.Verdict != "success" || got.Ban == nil || len(got.URLs) != 1 || got.Routers["homeassistant"] != 1 {
 		t.Errorf("détail : %+v", got)
 	}
 	if rec := get(t, s, "/api/ip/203.0.113.99?window=1h"); rec.Code != 404 {

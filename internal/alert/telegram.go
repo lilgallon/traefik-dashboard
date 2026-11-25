@@ -75,7 +75,7 @@ func (t *Telegram) Send(ctx context.Context, text string) error {
 			Description string `json:"description"`
 		}
 		_ = json.Unmarshal(body, &r)
-		return fmt.Errorf("Telegram : HTTP %d %s", resp.StatusCode, r.Description)
+		return fmt.Errorf("Telegram: HTTP %d %s", resp.StatusCode, r.Description)
 	}
 	return nil
 }
@@ -107,7 +107,7 @@ func (a *Async) Send(_ context.Context, text string) error {
 	case a.queue <- text:
 		return nil
 	default:
-		return errors.New("file d'envoi Telegram pleine, alerte abandonnée")
+		return errors.New("Telegram send queue full, alert dropped")
 	}
 }
 
@@ -126,7 +126,7 @@ func (a *Async) run() {
 			}
 		}
 		if err != nil {
-			a.logf("alerte Telegram non envoyée : %v", err)
+			a.logf("Telegram alert not sent: %v", err)
 		}
 	}
 }
@@ -138,7 +138,7 @@ type Log struct {
 }
 
 func (l Log) Send(_ context.Context, text string) error {
-	l.Logf("alerte (Telegram non configuré) : %s", strings.ReplaceAll(text, "\n", " | "))
+	l.Logf("alert (Telegram not configured): %s", strings.ReplaceAll(text, "\n", " | "))
 	return nil
 }
 

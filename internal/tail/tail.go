@@ -52,15 +52,15 @@ func Backfill(dir string, fn func(line []byte)) (offset int64, err error) {
 
 	for _, a := range archives {
 		if err := readGz(a.path, fn); err != nil {
-			errs = append(errs, fmt.Errorf("%s : %w", filepath.Base(a.path), err))
+			errs = append(errs, fmt.Errorf("%s: %w", filepath.Base(a.path), err))
 		}
 	}
 	if _, err := readPlain(filepath.Join(dir, baseName+".1"), fn); err != nil {
-		errs = append(errs, fmt.Errorf("%s.1 : %w", baseName, err))
+		errs = append(errs, fmt.Errorf("%s.1: %w", baseName, err))
 	}
 	offset, err = readPlain(filepath.Join(dir, baseName), fn)
 	if err != nil {
-		errs = append(errs, fmt.Errorf("%s : %w", baseName, err))
+		errs = append(errs, fmt.Errorf("%s: %w", baseName, err))
 	}
 	return offset, errors.Join(errs...)
 }

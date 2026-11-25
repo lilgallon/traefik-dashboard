@@ -8,7 +8,7 @@ Live security dashboard for Traefik access logs. It answers one question: **is a
 - **Bans** *(optional)*: ban or unban an IP through CrowdSec from the IP detail panel.
 - **WAF monitoring**: CrowdSec bans, alerts, triggered scenarios, AppSec blocks and community blocklist size.
 
-Read-only by default: banning is enabled only when you provide a CrowdSec machine account.
+Read-only by default: banning is enabled only when you provide a CrowdSec machine account. Available in English and French.
 
 ![Dashboard: an unknown IP got a successful response in the last 24 hours](docs/screenshots/overview-light.png)
 
@@ -22,7 +22,7 @@ Read-only by default: banning is enabled only when you provide a CrowdSec machin
 
 </details>
 
-> **Status**: early release, extracted from a personal home server. The UI is in French for now; English is planned. See the [roadmap](#roadmap).
+> **Status**: early release, extracted from a personal home server. See the [roadmap](#roadmap).
 
 ## How it works
 
@@ -86,6 +86,7 @@ All settings are environment variables. Only the log directory and `names.yaml` 
 | `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID` | | Telegram alerts. Without them, alerts are only logged. |
 | `TELEGRAM_API_URL` | `https://api.telegram.org` | Telegram API base URL (proxy, or the local mock). |
 | `DAILY_AT` | `08:00` | Time of the daily summary (UTC). |
+| `LANGUAGE` | `en` | Language of the notifications (`en` or `fr`), and of the page when the browser asks for no supported language. |
 
 ### GeoLite2 databases
 
@@ -103,6 +104,10 @@ The syntax is documented in [`examples/names.yaml`](examples/names.yaml). In sho
 - `lists:` marks a rule's IPs as members of a trust list: `crowdsec` for the CrowdSec whitelist, or the name of a Traefik `ipAllowList` middleware.
 
 The file is reloaded within 10 seconds. An invalid file is rejected and the previous rules stay active.
+
+## Language
+
+The page follows the browser's language (English or French) and has an EN/FR toggle in its header, remembered by the browser. Warnings and errors from the service follow the page's language. Telegram alerts and the daily summary use `LANGUAGE`.
 
 ## Banning an IP
 
@@ -144,7 +149,7 @@ To work on the front end with hot reload, keep `make dev` running and start Vite
 
 ### Screenshots
 
-`make screenshots` regenerates the README screenshots in `docs/screenshots/` from the local environment, with Playwright running in Docker. It first waits until CrowdSec has banned a few scanners (about 3 minutes after `make dev`).
+`make screenshots` regenerates the README screenshots in `docs/screenshots/` from the local environment, with Playwright running in Docker. It first waits until CrowdSec has banned a few scanners (about 3 minutes after `make dev`). `SCREENSHOT_LANG=fr make screenshots` takes them in French.
 
 ### Tests
 
@@ -157,7 +162,6 @@ The GeoLite2 test is skipped unless the databases are in `testdata/geo/`.
 
 ## Roadmap
 
-- English UI (and i18n)
 - Optional authentication, required to enable write features
 - Allowlist management from the UI: a dedicated Traefik dynamic file, and CrowdSec allowlists
 - Generic webhook notifications (ntfy, Gotify, Discord…)

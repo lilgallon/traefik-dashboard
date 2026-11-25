@@ -92,10 +92,10 @@ const (
 	maxRecent = 200
 
 	// OthersIP et OthersPath désignent les requêtes regroupées hors plafond.
-	OthersIP   = "autres"
-	OthersPath = "(autres)"
+	OthersIP   = "others"
+	OthersPath = "(others)"
 	// NoRouter : requêtes qu'aucun router n'a prises (hôte inconnu).
-	NoRouter = "(aucun)"
+	NoRouter = "(none)"
 )
 
 // LiveLag : le suivi du fichier sonde toutes les 500 ms, donc une seconde n'est

@@ -1,12 +1,17 @@
-import { describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { periodQuery, type ClassCounts, type Hit, type IpRow, type LiveTick, type Summary } from './api'
 import { chartData, dataState, groupIps, hitClass, hitStatus, visibleHits, liveKpis, periodKey, periodPhrase, rangeLabel, ruleSnippet, scenarioLabel, total } from './model'
+import { setLang } from './i18n.svelte'
+
+// Les libellés attendus ici sont en français.
+beforeAll(() => setLang('fr', false))
+afterAll(() => setLang('en', false))
 
 const counts = (c: Partial<ClassCounts> = {}): ClassCounts => ({ '1xx': 0, '2xx': 0, '3xx': 0, '4xx': 0, '5xx': 0, abandon: 0, ...c })
 
 const row = (ip: string, name: string, c: Partial<ClassCounts>, extra: Partial<IpRow> = {}): IpRow => ({
   ip, name, looksLike: '', country: 'FR', org: 'Free', asn: 1, byClass: counts(c), successes: 0,
-  bytesIn: 10, bytesOut: 100, verdict: name ? 'connue' : 'bloquée', ban: null, ...extra,
+  bytesIn: 10, bytesOut: 100, verdict: name ? 'known' : 'blocked', ban: null, ...extra,
 })
 
 const tick = (t: number, c: Partial<ClassCounts> = {}): LiveTick => ({
@@ -126,7 +131,7 @@ describe('ruleSnippet', () => {
     expect(ruleSnippet({ ip: '2001:db8:e487::1', asn: 0, org: '', routers: {} }, 'ip')).toContain('ip: ["2001:db8:e487::1"]')
   })
   it('propose une règle par opérateur, restreinte aux routers vus', () => {
-    expect(ruleSnippet({ ip: '198.51.100.1', asn: 7738, org: 'V tal', routers: { gotify: 1, homeassistant: 3, '(aucun)': 2 } }, 'asn')).toBe(
+    expect(ruleSnippet({ ip: '198.51.100.1', asn: 7738, org: 'V tal', routers: { gotify: 1, homeassistant: 3, '(none)': 2 } }, 'asn')).toBe(
       '  - name: À nommer\n    asn: [7738]  # V tal\n    routers: [homeassistant, gotify]\n',
     )
   })

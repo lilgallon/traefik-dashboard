@@ -1,21 +1,14 @@
 <script lang="ts">
   import type { VerdictKind } from '../lib/api'
+  import { verdictMeta } from '../lib/model'
 
   let { verdict }: { verdict: VerdictKind } = $props()
 
   // La couleur n'est jamais seule : le libellé est toujours là.
-  const meta: Record<VerdictKind, { tone: string; title: string }> = {
-    connue: { tone: 'neutral', title: 'Toutes ses requêtes sont couvertes par une règle de nom' },
-    succès: { tone: 'bad', title: 'A obtenu un succès hors des URL anonymes' },
-    public: { tone: 'quiet', title: 'Succès uniquement sur des URL anonymes par conception' },
-    bloquée: { tone: 'good', title: 'Seulement des refus (403) : allowlist, CrowdSec ou AppSec' },
-    tâtonne: { tone: 'warn', title: 'Des 404 ou autres 4xx, aucun succès' },
-    autre: { tone: 'quiet', title: 'Ni succès ni refus : redirections, abandons ou erreurs serveur' },
-  }
-  const m = $derived(meta[verdict] ?? meta.autre)
+  const m = $derived(verdictMeta(verdict))
 </script>
 
-<span class="badge {m.tone}" title={m.title}><i></i>{verdict}</span>
+<span class="badge {m.tone}" title={m.title}><i></i>{m.label}</span>
 
 <style>
   .badge {

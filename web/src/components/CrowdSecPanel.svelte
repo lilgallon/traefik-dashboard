@@ -1,6 +1,7 @@
 <script lang="ts">
   import { unbanIp, type Period, type Summary } from '../lib/api'
-  import { ago, countryName, formatCount, formatDayTime, pluriel, remaining } from '../lib/format'
+  import { ago, countryName, formatCount, formatDayTime, remaining } from '../lib/format'
+  import { t, tn } from '../lib/i18n.svelte'
   import { periodPhrase, scenarioLabel } from '../lib/model'
   import Icon from './Icon.svelte'
   import KindBadge from './KindBadge.svelte'
@@ -55,54 +56,54 @@
   <header class="card-head">
     <div>
       <h2 class="card-title" id="cs-title">CrowdSec</h2>
-      <p class="card-sub">bans, blocages WAF et blocklist · alertes {periodPhrase(period)}</p>
+      <p class="card-sub">{t('cs.sub', { period: periodPhrase(period) })}</p>
     </div>
   </header>
 
   {#if !summary}
     <div class="sk-rows">{#each Array(4) as _, i (i)}<span class="skeleton"></span>{/each}</div>
   {:else if !cs}
-    <p class="empty">Bloc CrowdSec indisponible.</p>
+    <p class="empty">{t('cs.unavailable')}</p>
   {:else}
     {#if !cs.enabled}
-      <p class="note"><Icon name="info" size={15} /><span>Alertes indisponibles : le service n'a pas de compte machine CrowdSec (<span class="mono">CROWDSEC_MACHINE_PASSWORD</span>). Seuls les bans en cours s'affichent.</span></p>
+      <p class="note"><Icon name="info" size={15} /><span>{t('cs.noMachine', { env: 'CROWDSEC_MACHINE_PASSWORD' })}</span></p>
     {:else if cs.error}
-      <p class="note warn"><Icon name="alert" size={15} /><span>Dernière lecture des alertes en échec ({cs.error}) : la liste peut être en retard.</span></p>
+      <p class="note warn"><Icon name="alert" size={15} /><span>{t('cs.alertsError', { error: cs.error })}</span></p>
     {/if}
 
     <dl class="stats">
       <div>
-        <dt>Bans en cours</dt>
+        <dt>{t('cs.currentBans')}</dt>
         <dd>{formatCount(cs.bans.length)}</dd>
-        <p>{pluriel(cs.bans.filter((b) => b.manual).length, 'manuel', 'manuels')}</p>
+        <p>{tn('cs.manualCount', cs.bans.filter((b) => b.manual).length)}</p>
       </div>
       <div>
-        <dt>Bans posés</dt>
+        <dt>{t('cs.bansSet')}</dt>
         <dd>{cs.enabled ? formatCount(cs.counts.bans) : '—'}</dd>
-        <p>{cs.enabled ? `dont ${pluriel(cs.counts.manual, 'manuel', 'manuels')}` : periodPhrase(period)}</p>
+        <p>{cs.enabled ? t('cs.ofWhich', { x: tn('cs.manualCount', cs.counts.manual) }) : periodPhrase(period)}</p>
       </div>
       <div>
-        <dt>Bloquées par le WAF</dt>
+        <dt>{t('cs.waf')}</dt>
         <dd>{cs.enabled ? formatCount(cs.counts.waf) : '—'}</dd>
-        <p>requêtes, sans ban</p>
+        <p>{t('cs.wafSub')}</p>
       </div>
       <div>
-        <dt>IP signalées</dt>
+        <dt>{t('cs.reported')}</dt>
         <dd>{cs.enabled ? formatCount(cs.counts.ips) : '—'}</dd>
-        <p>{cs.enabled && cs.counts.other > 0 ? `${pluriel(cs.counts.other, 'alerte', 'alertes')} sans décision` : 'distinctes'}</p>
+        <p>{cs.enabled && cs.counts.other > 0 ? t('cs.noDecision', { x: tn('common.alerts', cs.counts.other) }) : t('cs.distinct')}</p>
       </div>
-      <div title={cs.blocklist ? `${formatCount(cs.blocklist.community)} de la communauté (CAPI) · ${formatCount(cs.blocklist.lists)} des listes abonnées · lu ${ago(cs.blocklist.at, now)}` : undefined}>
-        <dt>Blocklist</dt>
+      <div title={cs.blocklist ? t('cs.blocklistTitle', { community: formatCount(cs.blocklist.community), lists: formatCount(cs.blocklist.lists), ago: ago(cs.blocklist.at, now) }) : undefined}>
+        <dt>{t('cs.blocklist')}</dt>
         <dd>{cs.blocklist ? formatCount(cs.blocklist.community + cs.blocklist.lists) : '—'}</dd>
-        <p>{cs.blocklist ? 'IP bannies d’office' : 'pas encore lue'}</p>
+        <p>{cs.blocklist ? t('cs.blocklistSub') : t('cs.notRead')}</p>
       </div>
     </dl>
 
     <div class="cols">
       <div class="col">
-        <h3>Bans en cours</h3>
+        <h3>{t('cs.currentBans')}</h3>
         {#if cs.bans.length === 0}
-          <p class="none">Aucun ban local en cours.</p>
+          <p class="none">{t('cs.noBans')}</p>
         {:else}
           <ul class="bans">
             {#each bans as b (b.ip)}
@@ -121,7 +122,7 @@
                   <span class="until" title={b.until ? formatDayTime(new Date(b.until)) : undefined}>{remaining(b.until, now)}</span>
                   {#if cs.enabled}
                     <button type="button" class="lift" class:confirm={confirmIp === b.ip} disabled={pending === b.ip} onclick={() => unban(b.ip)}>
-                      {confirmIp === b.ip ? 'Confirmer' : 'Lever'}
+                      {confirmIp === b.ip ? t('cs.confirm') : t('cs.lift')}
                     </button>
                   {/if}
                 </div>
@@ -131,18 +132,18 @@
           {#if unbanError}<p class="err">{unbanError}</p>{/if}
           {#if cs.bans.length > BANS_SHOWN}
             <button type="button" class="more" onclick={() => (allBans = !allBans)}>
-              {allBans ? 'Réduire' : `Voir les ${cs.bans.length} bans`}
+              {allBans ? t('common.collapse') : t('cs.seeAll', { n: cs.bans.length })}
             </button>
           {/if}
         {/if}
       </div>
 
       <div class="col">
-        <h3>Scénarios déclenchés</h3>
+        <h3>{t('cs.scenarios')}</h3>
         {#if !cs.enabled}
           <p class="none">—</p>
         {:else if cs.scenarios.length === 0}
-          <p class="none">Aucune alerte {periodPhrase(period)}.</p>
+          <p class="none">{t('cs.noAlerts', { period: periodPhrase(period) })}</p>
         {:else}
           <ul class="scen">
             {#each cs.scenarios as s (s.scenario + s.kind)}
@@ -153,8 +154,8 @@
                 </div>
                 {#if s.detail}<p class="detail">{s.detail}</p>{/if}
                 <p class="facts">
-                  <b>{pluriel(s.alerts, s.kind === 'waf' ? 'requête' : 'alerte', s.kind === 'waf' ? 'requêtes' : 'alertes')}</b>
-                  · {pluriel(s.ips, 'IP', 'IP')}
+                  <b>{tn(s.kind === 'waf' ? 'common.requests' : 'common.alerts', s.alerts)}</b>
+                  · {tn('common.ips', s.ips)}
                   {#if s.hosts.length > 0}· {s.hosts.join(', ')}{/if}
                   · <span title={formatDayTime(new Date(s.last))}>{ago(s.last, now)}</span>
                 </p>
@@ -167,7 +168,7 @@
 
     {#if cs.enabled && cs.recent.length > 0}
       <div class="recent">
-        <h3>Dernières alertes</h3>
+        <h3>{t('cs.recent')}</h3>
         <ul>
           {#each cs.recent as a (a.id)}
             <li>

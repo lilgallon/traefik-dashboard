@@ -1,7 +1,8 @@
 <script lang="ts">
   import type { Kpis } from '../lib/api'
   import { formatBytes, formatCount, formatRps, percent } from '../lib/format'
-  import { STACK, total } from '../lib/model'
+  import { t, tn } from '../lib/i18n.svelte'
+  import { classLabel, STACK, total } from '../lib/model'
   import ClassBar from './ClassBar.svelte'
   import Icon from './Icon.svelte'
 
@@ -15,14 +16,14 @@
   )
 </script>
 
-<section class="kpis" class:busy aria-label="Indicateurs de charge">
+<section class="kpis" class:busy aria-label={t('kpi.aria')}>
   <article class="card kpi">
-    <h3><Icon name="activity" size={14} />Requêtes par seconde</h3>
+    <h3><Icon name="activity" size={14} />{t('kpi.rps')}</h3>
     {#if kpis}
-      <p class="value">{formatRps(kpis.avgRps)}<small>en moyenne</small></p>
+      <p class="value">{formatRps(kpis.avgRps)}<small>{t('kpi.avg')}</small></p>
       <p class="sub">
-        pic <b>{formatRps(kpis.peakRps)}</b>
-        {#if currentRps !== null}<span aria-hidden="true">·</span> en ce moment <b>{formatRps(currentRps)}</b>{/if}
+        {t('kpi.peak')} <b>{formatRps(kpis.peakRps)}</b>
+        {#if currentRps !== null}<span aria-hidden="true">·</span> {t('kpi.now')} <b>{formatRps(currentRps)}</b>{/if}
       </p>
     {:else}
       <span class="skeleton sk-value"></span><span class="skeleton sk-sub"></span>
@@ -30,34 +31,34 @@
   </article>
 
   <article class="card kpi">
-    <h3><Icon name="arrow-down" size={14} />Volume entrant</h3>
+    <h3><Icon name="arrow-down" size={14} />{t('kpi.in')}</h3>
     {#if kpis}
       <p class="value">{formatBytes(kpis.bytesIn)}</p>
-      <p class="sub">corps des requêtes reçues</p>
+      <p class="sub">{t('kpi.inSub')}</p>
     {:else}
       <span class="skeleton sk-value"></span><span class="skeleton sk-sub"></span>
     {/if}
   </article>
 
   <article class="card kpi">
-    <h3><Icon name="arrow-up" size={14} />Volume sortant</h3>
+    <h3><Icon name="arrow-up" size={14} />{t('kpi.out')}</h3>
     {#if kpis}
       <p class="value">{formatBytes(kpis.bytesOut)}</p>
-      <p class="sub">réponses envoyées</p>
+      <p class="sub">{t('kpi.outSub')}</p>
     {:else}
       <span class="skeleton sk-value"></span><span class="skeleton sk-sub"></span>
     {/if}
   </article>
 
   <article class="card kpi statuses">
-    <h3>Statuts</h3>
+    <h3>{t('kpi.statuses')}</h3>
     {#if kpis}
-      <p class="value">{formatCount(sum)}<small>requêtes</small></p>
+      <p class="value">{formatCount(sum)}<small>{t('kpi.requests')}</small></p>
       <ClassBar counts={kpis.byClass} height={8} />
       <dl>
         {#each parts as p (p.key)}
           <div class:nil={p.n === 0}>
-            <dt><i class="swatch" style:background="var({p.cssVar})"></i>{p.label}</dt>
+            <dt><i class="swatch" style:background="var({p.cssVar})"></i>{classLabel(p.key)}</dt>
             <dd>{formatCount(p.n)} <span>{percent(p.n, sum)}</span></dd>
           </div>
         {/each}
@@ -68,14 +69,14 @@
   </article>
 
   <article class="card kpi">
-    <h3><Icon name="shield" size={14} />Bans CrowdSec</h3>
+    <h3><Icon name="shield" size={14} />{t('kpi.bans')}</h3>
     {#if kpis}
       {#if kpis.activeBans < 0}
         <p class="value unknown">—</p>
-        <p class="sub">CrowdSec injoignable</p>
+        <p class="sub">{t('kpi.csDown')}</p>
       {:else}
         <p class="value">{formatCount(kpis.activeBans)}</p>
-        <p class="sub">{kpis.activeBans < 2 ? 'ban en cours' : 'bans en cours'} (4 h chacun)</p>
+        <p class="sub">{tn('kpi.bansSub', kpis.activeBans)}</p>
       {/if}
     {:else}
       <span class="skeleton sk-value"></span><span class="skeleton sk-sub"></span>

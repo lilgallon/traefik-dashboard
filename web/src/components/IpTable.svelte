@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { ClassCounts, IpRow, Summary } from '../lib/api'
-  import { countryName, formatBytes, formatCount, pluriel } from '../lib/format'
+  import { countryName, formatBytes, formatCount } from '../lib/format'
+  import { t, tn } from '../lib/i18n.svelte'
   import { groupIps, type IpGroup } from '../lib/model'
   import Icon from './Icon.svelte'
   import VerdictBadge from './VerdictBadge.svelte'
@@ -30,7 +31,7 @@
   {#each cols as k (k)}
     <td class="num" class:zero={c[k] === 0}>{formatCount(c[k])}</td>
   {/each}
-  <td class="num" title="{formatBytes(bytesIn)} entrants, {formatBytes(bytesOut)} sortants">{formatBytes(bytesIn + bytesOut)}</td>
+  <td class="num" title={t('ips.volumeTitle', { in: formatBytes(bytesIn), out: formatBytes(bytesOut) })}>{formatBytes(bytesIn + bytesOut)}</td>
 {/snippet}
 
 {#snippet where(r: IpRow)}
@@ -38,49 +39,48 @@
     {#if r.country}<span title={countryName(r.country)}>{r.country}</span>{/if}
     {#if r.country && r.org}<span aria-hidden="true">·</span>{/if}
     {#if r.org}<span>{r.org}</span>{/if}
-    {#if !r.country && !r.org && r.ip !== 'autres'}<span>origine inconnue</span>{/if}
+    {#if !r.country && !r.org && r.ip !== 'others'}<span>{t('ips.unknownOrigin')}</span>{/if}
   </span>
 {/snippet}
 
 <section class="card" class:busy>
   <header class="card-head">
     <div>
-      <h2 class="card-title">Adresses IP</h2>
+      <h2 class="card-title">{t('ips.title')}</h2>
       <p class="card-sub">
         {#if summary}
-          {pluriel(summary.counts.namedIps, 'nommée', 'nommées')} · {pluriel(summary.counts.unknownIps, 'inconnue', 'inconnues')} · cliquer
-          une ligne pour le détail
+          {tn('ips.namedCount', summary.counts.namedIps)} · {tn('ips.unknownCount', summary.counts.unknownIps)} · {t('ips.clickHint')}
         {:else}
           &nbsp;
         {/if}
       </p>
     </div>
-    <div class="segmented" role="group" aria-label="Filtrer les adresses">
-      <button type="button" aria-pressed={filter === 'all'} onclick={() => (filter = 'all')}>Toutes</button>
-      <button type="button" aria-pressed={filter === 'named'} onclick={() => (filter = 'named')}>Nommées</button>
-      <button type="button" aria-pressed={filter === 'unknown'} onclick={() => (filter = 'unknown')}>Inconnues</button>
+    <div class="segmented" role="group" aria-label={t('ips.filterAria')}>
+      <button type="button" aria-pressed={filter === 'all'} onclick={() => (filter = 'all')}>{t('filter.all')}</button>
+      <button type="button" aria-pressed={filter === 'named'} onclick={() => (filter = 'named')}>{t('filter.named')}</button>
+      <button type="button" aria-pressed={filter === 'unknown'} onclick={() => (filter = 'unknown')}>{t('filter.unknown')}</button>
     </div>
   </header>
 
   {#if !summary}
     <div class="sk-rows">{#each Array(6) as _, i (i)}<span class="skeleton"></span>{/each}</div>
   {:else if summary.ips.length === 0}
-    <p class="empty">Aucune requête sur la période.</p>
+    <p class="empty">{t('common.noRequests')}</p>
   {:else}
     <div class="table-scroll">
       <table class="tbl">
         <thead>
           <tr>
-            <th scope="col">Qui</th>
+            <th scope="col">{t('ips.who')}</th>
             {#each cols as k (k)}<th scope="col" class="num"><i class="swatch" style:background="var(--c-{k})"></i>{k}</th>{/each}
-            <th scope="col" class="num">Volume</th>
-            <th scope="col" class="vcol">Verdict</th>
+            <th scope="col" class="num">{t('ips.volume')}</th>
+            <th scope="col" class="vcol">{t('ips.verdict')}</th>
           </tr>
         </thead>
 
         {#if filter !== 'unknown'}
           <tbody>
-            <tr class="section"><th colspan="7" scope="colgroup">Nommées <span>{groups.named.length}</span></th></tr>
+            <tr class="section"><th colspan="7" scope="colgroup">{t('filter.named')} <span>{groups.named.length}</span></th></tr>
             {#each groups.named as g (g.name)}
               {@const multi = g.rows.length > 1}
               <tr class="row" onclick={() => activate(g)}>
@@ -91,7 +91,7 @@
                     <span class="id">
                       <strong>{g.name}</strong>
                       {#if multi}
-                        <span class="meta">{g.rows.length} adresses</span>
+                        <span class="meta">{tn('ips.addresses', g.rows.length)}</span>
                       {:else}
                         <span class="meta mono" title={g.rows[0].ip}>{shortIp(g.rows[0].ip)}</span>
                       {/if}
@@ -99,7 +99,7 @@
                   </button>
                 </td>
                 {@render numbers(g.byClass, g.bytesIn, g.bytesOut)}
-                <td class="vcol"><VerdictBadge verdict="connue" /></td>
+                <td class="vcol"><VerdictBadge verdict="known" /></td>
               </tr>
               {#if multi && expanded[g.name]}
                 {#each g.rows as r (r.ip)}
@@ -116,30 +116,30 @@
                 {/each}
               {/if}
             {:else}
-              <tr><td colspan="7" class="none">Aucune IP nommée sur la période.</td></tr>
+              <tr><td colspan="7" class="none">{t('ips.noNamed')}</td></tr>
             {/each}
           </tbody>
         {/if}
 
         {#if filter !== 'named'}
           <tbody>
-            <tr class="section"><th colspan="7" scope="colgroup">Inconnues <span>{summary.counts.unknownIps}</span></th></tr>
+            <tr class="section"><th colspan="7" scope="colgroup">{t('filter.unknown')} <span>{summary.counts.unknownIps}</span></th></tr>
             {#each unknownShown as r (r.ip)}
-              <tr class="row" class:hot={r.verdict === 'succès'} onclick={() => r.ip !== 'autres' && onselect(r.ip)}>
+              <tr class="row" class:hot={r.verdict === 'success'} onclick={() => r.ip !== 'others' && onselect(r.ip)}>
                 <td>
-                  <button type="button" class="who" disabled={r.ip === 'autres'}
+                  <button type="button" class="who" disabled={r.ip === 'others'}
                     onclick={(e) => { e.stopPropagation(); onselect(r.ip) }}>
                     <span class="caret hidden"></span>
                     <span class="id">
-                      {#if r.ip === 'autres'}
-                        <strong>Autres IP</strong><span class="meta">regroupées : trafic exceptionnel</span>
+                      {#if r.ip === 'others'}
+                        <strong>{t('ips.others')}</strong><span class="meta">{t('ips.othersSub')}</span>
                       {:else}
                         <span class="mono ip" title={r.ip}>{shortIp(r.ip)}</span>
                         <span class="meta-line">
                           {@render where(r)}
-                          {#if r.looksLike}<span class="chip warn">ressemble à {r.looksLike}</span>{/if}
+                          {#if r.looksLike}<span class="chip warn">{t('common.looksLike', { name: r.looksLike })}</span>{/if}
                           <span class="inline-verdict"><VerdictBadge verdict={r.verdict} /></span>
-                          {#if r.ban}<span class="chip ban" title="Ban CrowdSec en cours"><Icon name="ban" size={11} />bannie · {r.ban.scenario.replace(/^crowdsecurity\//, '')}</span>{/if}
+                          {#if r.ban}<span class="chip ban" title={t('ips.banTitle')}><Icon name="ban" size={11} />{t('ips.banned')} · {r.ban.scenario.replace(/^crowdsecurity\//, '')}</span>{/if}
                         </span>
                       {/if}
                     </span>
@@ -149,7 +149,7 @@
                 <td class="vcol"><VerdictBadge verdict={r.verdict} /></td>
               </tr>
             {:else}
-              <tr><td colspan="7" class="none">Aucune IP inconnue sur la période.</td></tr>
+              <tr><td colspan="7" class="none">{t('ips.noUnknown')}</td></tr>
             {/each}
           </tbody>
         {/if}
@@ -157,9 +157,9 @@
     </div>
     {#if filter !== 'named' && groups.unknown.length > PAGE}
       <button type="button" class="more" onclick={() => (showAll = !showAll)}>
-        {showAll ? 'Réduire' : `Afficher les ${groups.unknown.length - PAGE} autres`}
+        {showAll ? t('common.collapse') : t('ips.showMore', { n: groups.unknown.length - PAGE })}
         {#if showAll && summary.counts.unknownIps > groups.unknown.length}
-          <span class="muted">({groups.unknown.length} affichées sur {formatCount(summary.counts.unknownIps)})</span>
+          <span class="muted">{t('ips.shownOf', { shown: groups.unknown.length, total: formatCount(summary.counts.unknownIps) })}</span>
         {/if}
       </button>
     {/if}

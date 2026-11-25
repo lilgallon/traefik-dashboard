@@ -80,7 +80,7 @@ services:
         set -e
         cscli machines add traefik-dashboard --password dev-machine-password -f /dev/null --force
         cscli decisions list -i 175.16.199.23 -o raw | grep -q ban || \
-          cscli decisions add -i 175.16.199.23 -d 24h -R "manuel (tableau de bord) : scan wp-admin"
+          cscli decisions add -i 175.16.199.23 -d 24h -R "manual (dashboard): scan wp-admin"
     volumes:
       - crowdsec-config:/etc/crowdsec
       - crowdsec-data:/var/lib/crowdsec/data
@@ -139,6 +139,7 @@ services:
     environment:
       - DASHBOARD_URL=http://traefik-dashboard:8080
       - OUT=/out
+      - SCREENSHOT_LANG=${SCREENSHOT_LANG:-en}
     volumes:
       - ./screenshots:/work
       - ../docs/screenshots:/out

@@ -27,7 +27,7 @@ type Alert struct {
 	Org      string    `json:"org"`
 	Scenario string    `json:"scenario"`
 	// Kind : « ban » (décision posée), « waf » (requête bloquée par AppSec, sans
-	// ban) ou « alerte » (scénario déclenché sans décision : IP déjà bannie…).
+	// ban) ou « alert » (scénario déclenché sans décision : IP déjà bannie…).
 	Kind   string   `json:"kind"`
 	Manual bool     `json:"manual"`           // posée à la main (cscli ou la page)
 	Detail string   `json:"detail,omitempty"` // règle WAF : « Detect access to .env files »
@@ -85,7 +85,7 @@ func (r *rawAlert) alert(machineID string) Alert {
 	a := Alert{
 		ID: r.ID, At: r.CreatedAt.UTC(), Scenario: r.Scenario, Events: r.EventsCount,
 		IP: cmp.Or(r.Source.IP, r.Source.Value), Country: r.Source.Cn, Org: r.Source.AsName,
-		Kind: "alerte", Manual: r.MachineID == machineID && machineID != "",
+		Kind: "alert", Manual: r.MachineID == machineID && machineID != "",
 	}
 	for _, d := range r.Decisions {
 		if strings.EqualFold(d.Type, "ban") {
@@ -137,7 +137,7 @@ func (w *Writer) Alerts(ctx context.Context, since time.Duration) ([]Alert, erro
 	}
 	var raw []rawAlert // « null » quand il n'y en a aucune
 	if err := json.Unmarshal(data, &raw); err != nil {
-		return nil, fmt.Errorf("LAPI CrowdSec : alertes illisibles : %w", err)
+		return nil, fmt.Errorf("CrowdSec LAPI: unreadable alerts: %w", err)
 	}
 	out := make([]Alert, 0, len(raw))
 	for i := range raw {
@@ -156,7 +156,7 @@ type Blocklist struct {
 
 func (c *Client) Blocklist(ctx context.Context) (Blocklist, error) {
 	if c.apiKey == "" {
-		return Blocklist{}, errors.New("clé de bouncer CrowdSec absente (CROWDSEC_BOUNCER_KEY)")
+		return Blocklist{}, errors.New("CrowdSec bouncer key missing (CROWDSEC_BOUNCER_KEY)")
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+"/v1/decisions?type=ban&origins=CAPI,lists", nil)
 	if err != nil {
@@ -171,13 +171,13 @@ func (c *Client) Blocklist(ctx context.Context) (Blocklist, error) {
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return Blocklist{}, fmt.Errorf("LAPI CrowdSec : HTTP %d", resp.StatusCode)
+		return Blocklist{}, fmt.Errorf("CrowdSec LAPI: HTTP %d", resp.StatusCode)
 	}
 	var ds []struct {
 		Origin string `json:"origin"`
 	}
 	if err := json.NewDecoder(io.LimitReader(resp.Body, 128<<20)).Decode(&ds); err != nil {
-		return Blocklist{}, fmt.Errorf("LAPI CrowdSec : blocklist illisible : %w", err)
+		return Blocklist{}, fmt.Errorf("CrowdSec LAPI: unreadable blocklist: %w", err)
 	}
 	b := Blocklist{At: time.Now().UTC().Truncate(time.Second)}
 	for _, d := range ds {

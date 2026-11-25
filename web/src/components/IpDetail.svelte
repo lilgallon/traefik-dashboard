@@ -1,7 +1,8 @@
 <script lang="ts">
-  import { BAN_DURATIONS, banIp, fetchIp, unbanIp, type BanDuration, type IpDetail, type Period, isRange } from '../lib/api'
+  import { BAN_DURATIONS, banDurationLabel, banIp, fetchIp, unbanIp, type BanDuration, type IpDetail, type Period, isRange } from '../lib/api'
   import { ago, countryName, formatBytes, formatCount, formatDayTime } from '../lib/format'
-  import { periodPhrase, ruleSnippet, scenarioLabel, total } from '../lib/model'
+  import { t, tn } from '../lib/i18n.svelte'
+  import { classLabel, periodPhrase, ruleSnippet, scenarioLabel, total } from '../lib/model'
   import ClassBar from './ClassBar.svelte'
   import Icon from './Icon.svelte'
   import KindBadge from './KindBadge.svelte'
@@ -74,7 +75,7 @@
   const snippet = $derived(detail ? ruleSnippet(detail, kind) : '')
   const rules = $derived(detail ? Object.entries(detail.rules).sort((a, b) => b[1] - a[1]) : [])
   const routers = $derived(detail ? Object.entries(detail.routers).sort((a, b) => b[1] - a[1]) : [])
-  const named = $derived(detail?.verdict === 'connue')
+  const named = $derived(detail?.verdict === 'known')
   const cols = ['2xx', '3xx', '4xx', '5xx'] as const
 
   async function act(kind: 'ban' | 'unban') {
@@ -98,7 +99,7 @@
     }
   }
 
-  const durationLabel = $derived(BAN_DURATIONS.find((d) => d.value === banDuration)?.label ?? banDuration)
+  const durationLabel = $derived(banDurationLabel(banDuration))
 
   async function copy() {
     try {
@@ -112,29 +113,29 @@
 </script>
 
 <div class="backdrop" onclick={onclose} aria-hidden="true"></div>
-<div class="panel" role="dialog" aria-modal="true" aria-label="Détail de l'IP {ip}" tabindex="-1" bind:this={panel}>
+<div class="panel" role="dialog" aria-modal="true" aria-label={t('common.ipDetail', { ip })} tabindex="-1" bind:this={panel}>
   <header>
     <div class="title">
       {#if detail?.name}<h2>{detail.name}</h2>{/if}
       <p class="mono ip" class:lead={!detail?.name}>{ip}</p>
     </div>
     {#if detail}<VerdictBadge verdict={detail.verdict} />{/if}
-    <button type="button" class="close" onclick={onclose} aria-label="Fermer le détail"><Icon name="close" size={18} /></button>
+    <button type="button" class="close" onclick={onclose} aria-label={t('ip.close')}><Icon name="close" size={18} /></button>
   </header>
 
   <div class="body">
     {#if status === 'loading'}
       <div class="sk">{#each Array(7) as _, i (i)}<span class="skeleton"></span>{/each}</div>
     {:else if status === 'absent'}
-      <p class="empty">Aucune requête de cette IP {periodPhrase(period)}.<br />Choisir une période plus longue pour la retrouver.</p>
+      <p class="empty">{t('ip.absent', { period: periodPhrase(period) })}<br />{t('ip.absentHint')}</p>
     {:else if status === 'error' || !detail}
-      <p class="empty">Détail indisponible : le tableau de bord ne répond pas.</p>
+      <p class="empty">{t('ip.error')}</p>
     {:else}
       <dl class="facts">
-        <div><dt>Pays</dt><dd>{detail.country ? `${countryName(detail.country)} (${detail.country})` : '—'}</dd></div>
-        <div><dt>Opérateur</dt><dd>{detail.org || '—'}{#if detail.asn}{' '}<span class="muted">· AS{detail.asn}</span>{/if}</dd></div>
-        <div><dt>Requêtes</dt><dd>{formatCount(total(detail.byClass))} <span class="muted">{periodPhrase(period)}</span></dd></div>
-        <div><dt>Volume</dt><dd>{formatBytes(detail.bytesIn)} <span class="muted">entrants</span> · {formatBytes(detail.bytesOut)} <span class="muted">sortants</span></dd></div>
+        <div><dt>{t('ip.country')}</dt><dd>{detail.country ? `${countryName(detail.country)} (${detail.country})` : '—'}</dd></div>
+        <div><dt>{t('ip.org')}</dt><dd>{detail.org || '—'}{#if detail.asn}{' '}<span class="muted">· AS{detail.asn}</span>{/if}</dd></div>
+        <div><dt>{t('ip.requests')}</dt><dd>{formatCount(total(detail.byClass))} <span class="muted">{periodPhrase(period)}</span></dd></div>
+        <div><dt>{t('ip.volume')}</dt><dd>{formatBytes(detail.bytesIn)} <span class="muted">{t('ip.in')}</span> · {formatBytes(detail.bytesOut)} <span class="muted">{t('ip.out')}</span></dd></div>
       </dl>
 
       <div class="statusline">
@@ -143,7 +144,7 @@
           {#each cols as k (k)}
             <li class:nil={detail.byClass[k] === 0}><i class="swatch" style:background="var(--c-{k})"></i>{k} <b>{formatCount(detail.byClass[k])}</b></li>
           {/each}
-          <li class:nil={detail.byClass.abandon === 0}><i class="swatch" style:background="var(--c-abandon)"></i>abandons <b>{formatCount(detail.byClass.abandon)}</b></li>
+          <li class:nil={detail.byClass.abandon === 0}><i class="swatch" style:background="var(--c-abandon)"></i>{classLabel('abandon')} <b>{formatCount(detail.byClass.abandon)}</b></li>
         </ul>
       </div>
 
@@ -151,13 +152,13 @@
         <div class="note ban">
           <Icon name="ban" size={15} />
           <div class="ban-body">
-            <span>Ban CrowdSec en cours : <b>{detail.ban.scenario}</b>{#if detail.ban.until && !detail.ban.until.startsWith('0001')}, jusqu'au {formatDayTime(new Date(detail.ban.until))}{/if}.</span>
+            <span>{t('ip.banNow')} <b>{detail.ban.scenario}</b>{#if detail.ban.until && !detail.ban.until.startsWith('0001')}{t('ip.until', { date: formatDayTime(new Date(detail.ban.until)) })}{/if}.</span>
             {#if detail.block.enabled}
               <div class="actions">
                 <button type="button" class="btn" class:confirm={confirming === 'unban'} disabled={busy} onclick={() => act('unban')}>
-                  {confirming === 'unban' ? 'Confirmer la levée du ban' : 'Lever le ban'}
+                  {confirming === 'unban' ? t('ip.confirmUnban') : t('ip.unban')}
                 </button>
-                {#if confirming === 'unban'}<button type="button" class="link" onclick={() => (confirming = null)}>Annuler</button>{/if}
+                {#if confirming === 'unban'}<button type="button" class="link" onclick={() => (confirming = null)}>{t('common.cancel')}</button>{/if}
               </div>
               {#if actionError}<p class="err">{actionError}</p>{/if}
             {/if}
@@ -166,18 +167,18 @@
       {/if}
 
       {#if named}
-        <p class="note"><Icon name="info" size={15} /><span>Nommée par la règle <b>« {detail.name} »</b> de <span class="mono">names.yaml</span> : toutes ses requêtes sont couvertes.</span></p>
+        <p class="note"><Icon name="info" size={15} /><span>{t('ip.namedBy1')} <b>{t('common.quote', { x: detail.name })}</b> {t('ip.namedBy2')} <span class="mono">names.yaml</span>{t('ip.namedBy3')}</span></p>
       {:else if rules.length > 0}
-        <p class="note warn"><Icon name="alert" size={15} /><span>En partie couverte par <b>« {rules[0][0]} »</b> ({formatCount(rules[0][1])} requêtes). Les autres sortent des routers ou des chemins de la règle : elles comptent comme celles d'une inconnue.</span></p>
+        <p class="note warn"><Icon name="alert" size={15} /><span>{t('ip.partly1')} <b>{t('common.quote', { x: rules[0][0] })}</b> {t('ip.partly2', { requests: tn('common.requests', rules[0][1]) })}</span></p>
       {:else if detail.looksLike}
-        <p class="note warn"><Icon name="alert" size={15} /><span>Ressemble à <b>« {detail.looksLike} »</b> (même IP ou même opérateur), mais ses requêtes sortent des routers ou des chemins de cette règle.</span></p>
+        <p class="note warn"><Icon name="alert" size={15} /><span>{t('ip.looks1')} <b>{t('common.quote', { x: detail.looksLike })}</b> {t('ip.looks2')}</span></p>
       {:else}
-        <p class="note"><Icon name="info" size={15} /><span>Aucune règle de <span class="mono">names.yaml</span> ne correspond à cette IP.</span></p>
+        <p class="note"><Icon name="info" size={15} /><span>{t('ip.noRule1')} <span class="mono">names.yaml</span> {t('ip.noRule2')}</span></p>
       {/if}
 
       {#if detail.alerts.length > 0}
         <section>
-          <h3>Historique CrowdSec (7 jours)</h3>
+          <h3>{t('ip.csHistory')}</h3>
           <ul class="raw cs">
             {#each detail.alerts as a (a.id)}
               <li>
@@ -195,7 +196,7 @@
       {/if}
 
       <section>
-        <h3>URL appelées</h3>
+        <h3>{t('ip.urls')}</h3>
         <ul class="urls">
           {#each detail.urls as u (u.host + u.path)}
             <li>
@@ -204,8 +205,8 @@
                 {#each cols as k (k)}
                   {#if u.byClass[k] > 0}<span class="c"><i class="swatch" style:background="var(--c-{k})"></i>{k} <b>{formatCount(u.byClass[k])}</b></span>{/if}
                 {/each}
-                {#if u.sockets > 0}<span class="c ws"><i class="swatch" style:background="var(--c-2xx)"></i>WebSocket accepté <b>{formatCount(u.sockets)}</b></span>{/if}
-                {#if u.byClass.abandon - u.sockets > 0}<span class="c"><i class="swatch" style:background="var(--c-abandon)"></i>abandons <b>{formatCount(u.byClass.abandon - u.sockets)}</b></span>{/if}
+                {#if u.sockets > 0}<span class="c ws"><i class="swatch" style:background="var(--c-2xx)"></i>{t('ip.wsAccepted')} <b>{formatCount(u.sockets)}</b></span>{/if}
+                {#if u.byClass.abandon - u.sockets > 0}<span class="c"><i class="swatch" style:background="var(--c-abandon)"></i>{classLabel('abandon')} <b>{formatCount(u.byClass.abandon - u.sockets)}</b></span>{/if}
               </span>
             </li>
           {/each}
@@ -213,28 +214,28 @@
       </section>
 
       <section>
-        <h3>Routers</h3>
+        <h3>{t('ip.routers')}</h3>
         <p class="chips">
-          {#each routers as [r, n] (r)}<span class="chip">{r === '(aucun)' ? 'aucun router' : r} <b>{formatCount(n)}</b></span>{/each}
+          {#each routers as [r, n] (r)}<span class="chip">{r === '(none)' ? t('services.noRouter') : r} <b>{formatCount(n)}</b></span>{/each}
         </p>
       </section>
 
       <section>
-        <h3>User-agents</h3>
+        <h3>{t('ip.userAgents')}</h3>
         {#if detail.userAgents.length > 0}
           <ul class="plain">{#each detail.userAgents as ua (ua)}<li class="mono">{ua}</li>{/each}</ul>
         {:else}
-          <p class="muted small">Aucun user-agent relevé.</p>
+          <p class="muted small">{t('ip.noUa')}</p>
         {/if}
       </section>
 
       {#if detail.rawPaths.length > 0}
         <section>
-          <h3>Dernières requêtes non nommées</h3>
+          <h3>{t('ip.raw')}</h3>
           <ul class="raw">
             {#each detail.rawPaths as h (h.time + h.path + h.status)}
               <li>
-                <span class="st s{Math.floor(h.status / 100)}" title={h.status === 0 ? 'Statut 0 : client parti avant la réponse, ou WebSocket (journalisé à sa fermeture)' : undefined}>{h.status === 0 ? 'sans statut' : h.status}</span>
+                <span class="st s{Math.floor(h.status / 100)}" title={h.status === 0 ? t('ip.status0') : undefined}>{h.status === 0 ? t('ip.noStatus') : h.status}</span>
                 <span class="mono req">{h.method} {h.host}{h.path}</span>
                 <span class="when" title={formatDayTime(new Date(h.time))}>{ago(h.time, now)}</span>
               </li>
@@ -245,30 +246,29 @@
 
       {#if !detail.ban && !named}
         <section>
-          <h3>Bloquer cette IP</h3>
+          <h3>{t('ip.block')}</h3>
           {#if !detail.block.enabled}
             <p class="small muted">
-              Blocage désactivé : le service n'a pas de compte machine CrowdSec (<span class="mono">CROWDSEC_MACHINE_PASSWORD</span>).
+              {t('ip.blockDisabled', { env: 'CROWDSEC_MACHINE_PASSWORD' })}
             </p>
           {:else if detail.block.refused}
             <p class="small muted">{detail.block.refused}</p>
           {:else}
             <p class="small muted">
-              Ban CrowdSec : Traefik refuse alors toutes ses requêtes (403) sur les services publics. Il expire seul et peut être levé
-              ici.
+              {t('ip.blockHelp')}
             </p>
             <div class="ban-form">
-              <div class="segmented" role="group" aria-label="Durée du ban">
-                {#each BAN_DURATIONS as d (d.value)}
-                  <button type="button" aria-pressed={banDuration === d.value} onclick={() => { banDuration = d.value; confirming = null }}>{d.label}</button>
+              <div class="segmented" role="group" aria-label={t('ip.durationAria')}>
+                {#each BAN_DURATIONS as d (d)}
+                  <button type="button" aria-pressed={banDuration === d} onclick={() => { banDuration = d; confirming = null }}>{banDurationLabel(d)}</button>
                 {/each}
               </div>
-              <input type="text" maxlength="120" placeholder="Motif (facultatif)" aria-label="Motif du ban" bind:value={banReason} />
+              <input type="text" maxlength="120" placeholder={t('ip.reason')} aria-label={t('ip.reasonAria')} bind:value={banReason} />
               <div class="actions">
                 <button type="button" class="btn danger" class:confirm={confirming === 'ban'} disabled={busy} onclick={() => act('ban')}>
-                  <Icon name="ban" size={14} />{confirming === 'ban' ? `Confirmer le ban de ${durationLabel}` : `Bannir ${durationLabel}`}
+                  <Icon name="ban" size={14} />{confirming === 'ban' ? t('ip.confirmBan', { d: durationLabel }) : t('ip.ban', { d: durationLabel })}
                 </button>
-                {#if confirming === 'ban'}<button type="button" class="link" onclick={() => (confirming = null)}>Annuler</button>{/if}
+                {#if confirming === 'ban'}<button type="button" class="link" onclick={() => (confirming = null)}>{t('common.cancel')}</button>{/if}
               </div>
               {#if actionError}<p class="err">{actionError}</p>{/if}
             </div>
@@ -278,22 +278,21 @@
 
       {#if !named}
         <section>
-          <h3>Nommer cette IP</h3>
+          <h3>{t('ip.name')}</h3>
           <p class="small muted">
-            Bloc à coller sous <span class="mono">names:</span> dans
-            <span class="mono">names.yaml</span> (relu à chaud dans les 10 s). Le rouge passé de cette
-            IP disparaît au rechargement.
+            {t('ip.nameHelp1')} <span class="mono">names:</span> {t('ip.nameHelp2')}
+            <span class="mono">names.yaml</span> {t('ip.nameHelp3')}
           </p>
           <div class="snippet-head">
-            <div class="segmented" role="group" aria-label="Type de règle">
-              <button type="button" aria-pressed={kind === 'ip'} onclick={() => (kind = 'ip')}>Par IP</button>
-              <button type="button" aria-pressed={kind === 'asn'} disabled={!detail.asn} onclick={() => (kind = 'asn')}>Par opérateur</button>
+            <div class="segmented" role="group" aria-label={t('ip.ruleKind')}>
+              <button type="button" aria-pressed={kind === 'ip'} onclick={() => (kind = 'ip')}>{t('ip.byIp')}</button>
+              <button type="button" aria-pressed={kind === 'asn'} disabled={!detail.asn} onclick={() => (kind = 'asn')}>{t('ip.byAsn')}</button>
             </div>
-            <button type="button" class="copy" onclick={copy}><Icon name={copied ? 'check' : 'copy'} size={14} />{copied ? 'Copié' : 'Copier'}</button>
+            <button type="button" class="copy" onclick={copy}><Icon name={copied ? 'check' : 'copy'} size={14} />{copied ? t('ip.copied') : t('ip.copy')}</button>
           </div>
           <pre class="mono">{snippet}</pre>
           {#if kind === 'asn'}
-            <p class="small muted">Une règle par opérateur couvre tous ses clients : la laisser restreinte à ces routers.</p>
+            <p class="small muted">{t('ip.asnHint')}</p>
           {/if}
         </section>
       {/if}

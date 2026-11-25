@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from 'svelte'
+  import { onMount, untrack } from 'svelte'
   import CrowdSecPanel from './components/CrowdSecPanel.svelte'
   import Freshness from './components/Freshness.svelte'
   import Icon from './components/Icon.svelte'
@@ -14,6 +14,7 @@
   import VerdictBanner from './components/VerdictBanner.svelte'
   import Warnings from './components/Warnings.svelte'
   import { fetchSummary, WINDOWS, type Period, type Summary, type TimeRange, type Window } from './lib/api'
+  import { lang, setLang, t } from './lib/i18n.svelte'
   import { createLive } from './lib/live.svelte'
   import { chartData, dataState, liveKpis, periodKey, rangeLabel, total } from './lib/model'
 
@@ -172,7 +173,23 @@
     return Date.parse(b) > Date.parse(a) || !a ? b || a : a
   })
 
-  const themeLabel: Record<ThemePref, string> = { auto: 'Thème : automatique', light: 'Thème : clair', dark: 'Thème : sombre' }
+  const themeLabel = $derived(t(`theme.${themePref}`))
+
+  function toggleLang() {
+    setLang(lang() === 'en' ? 'fr' : 'en')
+  }
+
+  // La langue part avec chaque requête (Accept-Language) : les avertissements du
+  // service suivent, il faut recharger le résumé.
+  let langSeen = lang()
+  $effect(() => {
+    const l = lang()
+    document.documentElement.lang = l
+    if (l !== langSeen) {
+      langSeen = l
+      untrack(() => void refresh())
+    }
+  })
   const themeIcon = $derived(themePref === 'auto' ? 'auto' : themePref === 'light' ? 'sun' : 'moon')
 
   $effect(() => {
@@ -186,13 +203,16 @@
       <span class="logo" aria-hidden="true"><Icon name="pulse" size={18} /></span>
       <div>
         <h1>Traefik</h1>
-        <p>Trafic entrant</p>
+        <p>{t('app.subtitle')}</p>
       </div>
     </div>
     <div class="fresh"><Freshness {mode} connected={live.connected} {lastLine} {now} /></div>
     <div class="controls">
       <PeriodPicker value={range ? null : win} onchange={setWindow} />
-      <button type="button" class="theme" onclick={cycleTheme} aria-label={themeLabel[themePref]} title={themeLabel[themePref]}>
+      <button type="button" class="lang" onclick={toggleLang} aria-label={t('lang.switchTo')} title={`${t('lang.label')} · ${t('lang.switchTo')}`}>
+        {lang().toUpperCase()}
+      </button>
+      <button type="button" class="theme" onclick={cycleTheme} aria-label={themeLabel} title={themeLabel}>
         <Icon name={themeIcon} size={17} />
       </button>
     </div>
@@ -203,8 +223,8 @@
     {#if shownRange}
       <div class="range" role="status">
         <Icon name="clock" size={16} />
-        <p>Intervalle figé <b>{rangeLabel(shownRange)}</b> · plus de mise à jour en direct</p>
-        <button type="button" onclick={backToLive}>Revenir au direct <kbd>Échap</kbd></button>
+        <p>{t('range.frozen')} <b>{rangeLabel(shownRange)}</b> · {t('range.noLive')}</p>
+        <button type="button" onclick={backToLive}>{t('range.back')} <kbd>{t('range.esc')}</kbd></button>
       </div>
     {/if}
     <VerdictBanner {mode} summary={shown} period={shownRange ?? win} {now} onselect={select} />
@@ -230,7 +250,7 @@
 
   <footer>
     <p>
-      Heures affichées dans le fuseau du navigateur · tableaux rafraîchis toutes les 5 s (sauf sur un intervalle figé) · noms et URL anonymes dans
+      {t('footer.text')}
       <span class="mono">names.yaml</span>
     </p>
   </footer>
@@ -288,7 +308,8 @@
     align-items: center;
     gap: 8px;
   }
-  .theme {
+  .theme,
+  .lang {
     display: grid;
     place-items: center;
     width: 34px;
@@ -299,7 +320,16 @@
     color: var(--text-2);
     cursor: pointer;
   }
-  .theme:hover {
+  .lang {
+    width: auto;
+    padding: 0 9px;
+    font: inherit;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+  }
+  .theme:hover,
+  .lang:hover {
     color: var(--text);
     border-color: var(--border-strong);
   }

@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { Hit } from '../lib/api'
   import { countryName, formatClock, formatDuration } from '../lib/format'
+  import { t } from '../lib/i18n.svelte'
   import { hitClass, hitStatus, visibleHits } from '../lib/model'
   import Icon from './Icon.svelte'
 
@@ -46,9 +47,9 @@
     return ip.length > 24 ? ip.slice(0, 12) + '…' + ip.slice(-8) : ip
   }
   function describe(h: Hit): string {
-    const who = h.name || `IP inconnue ${h.ip}`
-    const status = h.socket ? 'WebSocket accepté' : h.status > 0 ? `statut ${h.status}` : 'abandon'
-    return `${who}, ${h.method} ${h.host}${h.path}, ${status}${h.red ? ', succès d’une IP inconnue' : ''}. Ouvrir le détail de l’IP.`
+    const who = h.name || t('feed.unknownIp', { ip: h.ip })
+    const status = h.socket ? t('feed.wsAccepted') : h.status > 0 ? t('feed.status', { status: h.status }) : t('class.abandonOne')
+    return t('feed.describe', { who, method: h.method, url: h.host + h.path, status, red: h.red ? t('feed.redSuffix') : '' })
   }
 </script>
 
@@ -56,25 +57,25 @@
   <header class="card-head">
     <div>
       <h2 class="card-title" id="feed-title">
-        <span class="dot" class:on={connected && !frozen} aria-hidden="true"></span>Dernières requêtes
+        <span class="dot" class:on={connected && !frozen} aria-hidden="true"></span>{t('feed.title')}
       </h2>
       <p class="card-sub">
         {#if frozen}
-          En pause{#if waiting > 0}&nbsp;· {waiting}{waiting >= 200 ? ' ou plus' : ''} en attente{/if}
+          {t('feed.paused')}{#if waiting > 0}&nbsp;· {t(waiting >= 200 ? 'feed.waitingMore' : 'feed.waiting', { n: waiting })}{/if}
         {:else if !connected}
-          Flux interrompu, reconnexion en cours
+          {t('feed.interrupted')}
         {:else}
-          En direct · cliquer une ligne pour le détail de l'IP
+          {t('feed.live')}
         {/if}
       </p>
     </div>
     <div class="tools">
-      <div class="segmented" role="group" aria-label="Filtrer les requêtes">
-        <button type="button" aria-pressed={!unknownOnly} onclick={() => setFilter(false)}>Toutes</button>
-        <button type="button" aria-pressed={unknownOnly} onclick={() => setFilter(true)}>Inconnues</button>
+      <div class="segmented" role="group" aria-label={t('feed.filterAria')}>
+        <button type="button" aria-pressed={!unknownOnly} onclick={() => setFilter(false)}>{t('filter.all')}</button>
+        <button type="button" aria-pressed={unknownOnly} onclick={() => setFilter(true)}>{t('filter.unknown')}</button>
       </div>
       <button type="button" class="pause" class:active={frozen !== null} onclick={togglePause} aria-pressed={frozen !== null}
-        title={frozen ? 'Reprendre le défilement' : 'Mettre en pause'} aria-label={frozen ? 'Reprendre le défilement' : 'Mettre en pause'}>
+        title={frozen ? t('feed.resume') : t('feed.pause')} aria-label={frozen ? t('feed.resume') : t('feed.pause')}>
         <Icon name={frozen ? 'play' : 'pause'} size={15} />
       </button>
     </div>
@@ -83,9 +84,9 @@
   {#if rows.length === 0}
     <p class="empty">
       {#if source.length === 0}
-        {connected ? 'Aucune requête lue pour le moment.' : 'En attente du flux en direct…'}
+        {connected ? t('feed.empty') : t('feed.waitingStream')}
       {:else}
-        Aucune IP inconnue parmi les {source.length} dernières requêtes.
+        {t('feed.noUnknown', { n: source.length })}
       {/if}
     </p>
   {:else}
@@ -94,7 +95,7 @@
         <li>
           <button type="button" class="row" class:red={h.red} onclick={() => onselect(h.ip)} aria-label={describe(h)}>
             <span class="time mono">{formatClock(new Date(h.time))}</span>
-            <span class="status" title={h.socket ? 'WebSocket accepté (journalisé sans statut)' : h.status === 0 ? 'Le client est parti avant la réponse' : undefined}>
+            <span class="status" title={h.socket ? t('feed.wsTitle') : h.status === 0 ? t('feed.abandonTitle') : undefined}>
               <i class="swatch" style:background="var(--c-{hitClass(h) === '1xx' ? 'abandon' : hitClass(h)})"></i>{hitStatus(h)}
             </span>
             <span class="who">
@@ -104,11 +105,11 @@
                 <span class="ip mono">{shortIp(h.ip)}</span>
                 {#if h.country}<span class="cc" title={countryName(h.country)}>{h.country}</span>{/if}
               {/if}
-              {#if h.red}<span class="flag">succès</span>{/if}
+              {#if h.red}<span class="flag">{t('common.success')}</span>{/if}
             </span>
             <span class="req">
               <span class="method">{h.method}</span>
-              <span class="host">{h.host || '(sans hôte)'}</span><span class="path mono">{h.path}</span>
+              <span class="host">{h.host || t('common.noHost')}</span><span class="path mono">{h.path}</span>
             </span>
             <span class="dur">{formatDuration(h.ms)}</span>
           </button>

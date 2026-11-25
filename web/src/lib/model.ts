@@ -1,32 +1,30 @@
 // Ce que la page calcule à partir du résumé et du flux en direct.
 
-import { isRange, type AlertKind, type ClassCounts, type Hit, type IpRow, type Kpis, type LiveTick, type Period, type StatusClass, type Summary, type TimeRange, type Window } from './api'
-import { formatDayTime } from './format'
+import { isRange, type AlertKind, type ClassCounts, type Hit, type IpRow, type Kpis, type LiveTick, type Period, type StatusClass, type Summary, type TimeRange, type VerdictKind, type Window } from './api'
+import { formatDay, formatDayTime, formatHm } from './format'
+import { lang, t } from './i18n.svelte'
 
 export const WINDOW_SECONDS: Record<Window, number> = { '1h': 3600, '24h': 86400, '7d': 604800 }
-export const WINDOW_LABEL: Record<Window, string> = { '1h': '1 h', '24h': '24 h', '7d': '7 j' }
-export const WINDOW_PHRASE: Record<Window, string> = {
-  '1h': 'sur la dernière heure',
-  '24h': 'sur les dernières 24 h',
-  '7d': 'sur les 7 derniers jours',
+
+/** « 24 h » (fr), « 24h » (en). */
+export function windowLabel(w: Window): string {
+  return t(`window.${w}`)
 }
 
-const two = (n: number) => String(n).padStart(2, '0')
-const hm = (d: Date) => `${two(d.getHours())}:${two(d.getMinutes())}`
 const sameDay = (a: Date, b: Date) =>
   a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate()
 
-/** « de 14:02 à 14:37 » le même jour, « du 20/11 22:00 au 21/11 03:00 » sinon. */
+/** « le 20/11 de 14:02 à 14:37 » le même jour, « du 20/11 22:00 au 21/11 03:00 » sinon. */
 export function rangeLabel(r: TimeRange): string {
   const a = new Date(r.from * 1000)
   const b = new Date(r.to * 1000)
-  if (sameDay(a, new Date(b.getTime() - 1))) return `le ${formatDayTime(a).slice(0, 5)} de ${hm(a)} à ${hm(b)}`
-  return `du ${formatDayTime(a)} au ${formatDayTime(b)}`
+  if (sameDay(a, new Date(b.getTime() - 1))) return t('range.sameDay', { day: formatDay(a), from: formatHm(a), to: formatHm(b) })
+  return t('range.span', { from: formatDayTime(a), to: formatDayTime(b) })
 }
 
-/** « sur la dernière heure », ou « entre … » pour un intervalle. */
+/** « sur la dernière heure », ou l'intervalle choisi. */
 export function periodPhrase(p: Period): string {
-  return isRange(p) ? rangeLabel(p) : WINDOW_PHRASE[p]
+  return isRange(p) ? rangeLabel(p) : t(`period.${p}`)
 }
 
 /** Clé d'une période, pour savoir si le résumé affiché y correspond. */
@@ -39,13 +37,18 @@ export function capitalize(s: string): string {
 }
 
 /** Ordre d'empilement, du bas vers le haut : ce qui va bien en bas, les erreurs en haut. */
-export const STACK: { key: StatusClass; label: string; cssVar: string }[] = [
-  { key: '2xx', label: '2xx', cssVar: '--c-2xx' },
-  { key: '3xx', label: '3xx', cssVar: '--c-3xx' },
-  { key: 'abandon', label: 'abandons', cssVar: '--c-abandon' },
-  { key: '4xx', label: '4xx', cssVar: '--c-4xx' },
-  { key: '5xx', label: '5xx', cssVar: '--c-5xx' },
+export const STACK: { key: StatusClass; cssVar: string }[] = [
+  { key: '2xx', cssVar: '--c-2xx' },
+  { key: '3xx', cssVar: '--c-3xx' },
+  { key: 'abandon', cssVar: '--c-abandon' },
+  { key: '4xx', cssVar: '--c-4xx' },
+  { key: '5xx', cssVar: '--c-5xx' },
 ]
+
+/** Libellé d'une famille de statut : « 2xx », « abandons ». */
+export function classLabel(k: StatusClass): string {
+  return k === 'abandon' ? t('class.abandon') : k
+}
 
 export const STALE_AFTER_MS = 15 * 60 * 1000
 const OFFLINE_AFTER_MS = 30 * 1000
@@ -66,12 +69,12 @@ export interface IpGroup {
   bytesOut: number
 }
 
-/** Les IP nommées sont regroupées sous leur nom (« Maison » = IPv4 + plusieurs IPv6). */
+/** Les IP nommées sont regroupées sous leur nom (« Home » = IPv4 + plusieurs IPv6). */
 export function groupIps(rows: IpRow[]): { named: IpGroup[]; unknown: IpRow[] } {
   const groups = new Map<string, IpGroup>()
   const unknown: IpRow[] = []
   for (const r of rows) {
-    if (r.verdict !== 'connue' || !r.name) {
+    if (r.verdict !== 'known' || !r.name) {
       unknown.push(r)
       continue
     }
@@ -85,7 +88,7 @@ export function groupIps(rows: IpRow[]): { named: IpGroup[]; unknown: IpRow[] } 
     g.bytesIn += r.bytesIn
     g.bytesOut += r.bytesOut
   }
-  const named = [...groups.values()].sort((a, b) => total(b.byClass) - total(a.byClass) || a.name.localeCompare(b.name, 'fr'))
+  const named = [...groups.values()].sort((a, b) => total(b.byClass) - total(a.byClass) || a.name.localeCompare(b.name, lang()))
   return { named, unknown }
 }
 
@@ -182,13 +185,13 @@ export function ruleSnippet(
 ): string {
   if (kind === 'ip') {
     const ip = d.ip.includes(':') ? `"${d.ip}"` : d.ip
-    return `  - name: À nommer\n    ip: [${ip}]\n`
+    return `  - name: ${t('snippet.placeholder')}\n    ip: [${ip}]\n`
   }
   const routers = Object.entries(d.routers)
     .filter(([r]) => !r.startsWith('('))
     .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
     .map(([r]) => r)
-  let out = `  - name: À nommer\n    asn: [${d.asn}]${d.org ? `  # ${d.org}` : ''}\n`
+  let out = `  - name: ${t('snippet.placeholder')}\n    asn: [${d.asn}]${d.org ? `  # ${d.org}` : ''}\n`
   if (routers.length > 0) out += `    routers: [${routers.join(', ')}]\n`
   return out
 }
@@ -207,7 +210,7 @@ export function hitClass(h: Hit): StatusClass {
 /** Ce que la colonne « statut » affiche. */
 export function hitStatus(h: Hit): string {
   if (h.socket) return 'WS'
-  return h.status > 0 ? String(h.status) : 'abandon'
+  return h.status > 0 ? String(h.status) : t('class.abandonOne')
 }
 
 /** Les `limit` requêtes les plus récentes, IP nommées exclues si `unknownOnly`. */
@@ -226,8 +229,25 @@ export function scenarioLabel(s: string): string {
   return s.replace(/^crowdsecurity\//, '')
 }
 
-export const ALERT_KIND: Record<AlertKind, { label: string; tone: 'bad' | 'warn' | 'quiet'; title: string }> = {
-  ban: { label: 'ban', tone: 'bad', title: 'Scénario déclenché : IP bannie (toutes ses requêtes refusées)' },
-  waf: { label: 'WAF', tone: 'warn', title: 'Requête bloquée par le WAF (AppSec), sans ban' },
-  alerte: { label: 'signalée', tone: 'quiet', title: 'Scénario déclenché sans décision (IP déjà bannie, par exemple)' },
+const KIND_TONE: Record<AlertKind, 'bad' | 'warn' | 'quiet'> = { ban: 'bad', waf: 'warn', alert: 'quiet' }
+
+/** Libellé, ton et explication d'un type d'alerte CrowdSec. */
+export function alertKind(kind: AlertKind): { label: string; tone: 'bad' | 'warn' | 'quiet'; title: string } {
+  const k: AlertKind = kind in KIND_TONE ? kind : 'alert'
+  return { label: t(`kind.${k}`), tone: KIND_TONE[k], title: t(`kind.${k}.title`) }
+}
+
+const VERDICT_TONE: Record<VerdictKind, string> = {
+  known: 'neutral',
+  success: 'bad',
+  public: 'quiet',
+  blocked: 'good',
+  probing: 'warn',
+  other: 'quiet',
+}
+
+/** Libellé, ton et explication d'un verdict. */
+export function verdictMeta(v: VerdictKind): { label: string; tone: string; title: string } {
+  const k: VerdictKind = v in VERDICT_TONE ? v : 'other'
+  return { label: t(`verdict.${k}`), tone: VERDICT_TONE[k], title: t(`verdict.${k}.title`) }
 }

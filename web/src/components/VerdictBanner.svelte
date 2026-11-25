@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { Period, Summary } from '../lib/api'
-  import { ago, countryName, formatClock, formatCount, pluriel } from '../lib/format'
+  import { ago, countryName, formatClock, formatCount } from '../lib/format'
+  import { t, tn } from '../lib/i18n.svelte'
   import { capitalize, periodPhrase, type DataState } from '../lib/model'
   import Icon from './Icon.svelte'
 
@@ -20,7 +21,7 @@
   const successes = $derived(offenders.reduce((n, o) => n + o.count, 0))
 </script>
 
-<section class="banner {tone}" aria-live="polite" aria-label="Verdict de sécurité">
+<section class="banner {tone}" aria-live="polite" aria-label={t('banner.aria')}>
   <div class="head">
     <div class="icon" aria-hidden="true">
       {#if red}
@@ -37,42 +38,41 @@
     </div>
     <div class="text">
       {#if red}
-        <h2>{pluriel(offenders.length, 'IP inconnue a obtenu', 'IP inconnues ont obtenu')} un succès</h2>
+        <h2>{tn('banner.red.title', offenders.length)}</h2>
         <p>
-          {pluriel(successes, 'réponse de succès', 'réponses de succès')} hors des URL anonymes, {periodPhrase(period)}.
-          {#if mode === 'stale'}Les données sont en retard : la situation réelle peut être pire.{/if}
-          {#if mode === 'offline'}Tableau de bord injoignable : ces chiffres datent de {formatClock(new Date(summary?.generatedAt ?? 0))}.{/if}
+          {tn('banner.red.text', successes, { period: periodPhrase(period) })}
+          {#if mode === 'stale'}{t('banner.red.stale')}{/if}
+          {#if mode === 'offline'}{t('banner.red.offline', { time: formatClock(new Date(summary?.generatedAt ?? 0)) })}{/if}
         </p>
       {:else if mode === 'live'}
-        <h2>Aucune IP inconnue n'a obtenu de succès</h2>
+        <h2>{t('banner.ok.title')}</h2>
         <p>
-          {capitalize(periodPhrase(period))} :
           {#if (summary?.counts.unknownIps ?? 0) === 0}
-            aucune IP inconnue vue.
+            {t('banner.ok.none', { period: capitalize(periodPhrase(period)) })}
           {:else if summary?.counts.unknownIps === 1}
-            1 IP inconnue vue, bloquée, en échec ou limitée aux URL publiques.
+            {t('banner.ok.one', { period: capitalize(periodPhrase(period)) })}
           {:else}
-            {formatCount(summary?.counts.unknownIps ?? 0)} IP inconnues vues, toutes bloquées, en échec ou limitées aux URL publiques.
+            {t('banner.ok.many', { period: capitalize(periodPhrase(period)), n: formatCount(summary?.counts.unknownIps ?? 0) })}
           {/if}
         </p>
       {:else if mode === 'stale'}
-        <h2>Données en retard : rien ne prouve que tout va bien</h2>
+        <h2>{t('banner.stale.title')}</h2>
         <p>
-          Aucun succès d'IP inconnue dans les données lues, mais la dernière ligne de <span class="mono">access.log</span> date
-          d'{ago(summary?.lastLine ?? '', now)}. Traefik est arrêté, ou le fichier n'est plus lu.
+          {t('banner.stale.text1')} <span class="mono">access.log</span>
+          {t('banner.stale.text2', { ago: ago(summary?.lastLine ?? '', now) })}
         </p>
       {:else if mode === 'offline'}
-        <h2>Tableau de bord injoignable</h2>
+        <h2>{t('banner.offline.title')}</h2>
         <p>
-          {#if summary}Les chiffres affichés datent de {formatClock(new Date(summary.generatedAt))}.{/if} Nouvelle tentative toutes
-          les 5 secondes.
+          {#if summary}{t('banner.offline.since', { time: formatClock(new Date(summary.generatedAt)) })}{/if}
+          {t('banner.offline.retry')}
         </p>
       {:else if mode === 'backfill'}
-        <h2>Relecture des journaux des 7 derniers jours…</h2>
-        <p>Le verdict s'affiche dès que la relecture est terminée (quelques secondes).</p>
+        <h2>{t('banner.backfill.title')}</h2>
+        <p>{t('banner.backfill.text')}</p>
       {:else}
-        <h2>Chargement…</h2>
-        <p>Lecture du résumé.</p>
+        <h2>{t('banner.loading.title')}</h2>
+        <p>{t('banner.loading.text')}</p>
       {/if}
     </div>
   </div>
@@ -81,21 +81,21 @@
     <ul class="offenders">
       {#each offenders as o (o.ip)}
         <li>
-          <button type="button" onclick={() => onselect(o.ip)} aria-label="Détail de l'IP {o.ip}">
+          <button type="button" onclick={() => onselect(o.ip)} aria-label={t('common.ipDetail', { ip: o.ip })}>
             <span class="who">
               <span class="ip mono">{o.ip}</span>
               <span class="meta">
-                {#if o.country}<span title={countryName(o.country)}>{o.country}</span>{:else}<span>pays inconnu</span>{/if}
+                {#if o.country}<span title={countryName(o.country)}>{o.country}</span>{:else}<span>{t('common.unknownCountry')}</span>{/if}
                 <span aria-hidden="true">·</span>
-                <span>{o.org || 'opérateur inconnu'}</span>
-                {#if o.looksLike}<span class="looks">ressemble à {o.looksLike}</span>{/if}
+                <span>{o.org || t('common.unknownOrg')}</span>
+                {#if o.looksLike}<span class="looks">{t('common.looksLike', { name: o.looksLike })}</span>{/if}
               </span>
             </span>
             <span class="urls">
               {#each o.urls.slice(0, 3) as u (u)}<span class="mono url">{u}</span>{/each}
-              {#if o.urls.length > 3}<span class="extra">+ {o.urls.length - 3} autres URL</span>{/if}
+              {#if o.urls.length > 3}<span class="extra">{t('banner.moreUrls', { n: o.urls.length - 3 })}</span>{/if}
             </span>
-            <span class="count"><strong>{formatCount(o.count)}</strong> succès</span>
+            <span class="count"><strong>{formatCount(o.count)}</strong> {tn('banner.successes', o.count)}</span>
             <span class="go" aria-hidden="true"><Icon name="chevron" size={16} /></span>
           </button>
         </li>

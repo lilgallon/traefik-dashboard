@@ -44,7 +44,7 @@ type decision struct {
 // laissée de côté : elle ne dit rien de ce qui se passe ici.
 func (c *Client) Bans(ctx context.Context) (map[netip.Addr]store.Ban, error) {
 	if c.apiKey == "" {
-		return nil, errors.New("clé de bouncer CrowdSec absente (CROWDSEC_BOUNCER_KEY)")
+		return nil, errors.New("CrowdSec bouncer key missing (CROWDSEC_BOUNCER_KEY)")
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet,
 		c.baseURL+"/v1/decisions?type=ban&scope=ip&origins=crowdsec,cscli", nil)
@@ -58,7 +58,7 @@ func (c *Client) Bans(ctx context.Context) (map[netip.Addr]store.Ban, error) {
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("LAPI CrowdSec : HTTP %d", resp.StatusCode)
+		return nil, fmt.Errorf("CrowdSec LAPI: HTTP %d", resp.StatusCode)
 	}
 	body, err := io.ReadAll(io.LimitReader(resp.Body, 32<<20))
 	if err != nil {
@@ -66,7 +66,7 @@ func (c *Client) Bans(ctx context.Context) (map[netip.Addr]store.Ban, error) {
 	}
 	var decisions []decision // « null » quand il n'y a aucune décision
 	if err := json.Unmarshal(body, &decisions); err != nil {
-		return nil, fmt.Errorf("LAPI CrowdSec : réponse illisible : %w", err)
+		return nil, fmt.Errorf("CrowdSec LAPI: unreadable response: %w", err)
 	}
 	now := time.Now()
 	bans := make(map[netip.Addr]store.Ban, len(decisions))

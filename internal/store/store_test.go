@@ -313,8 +313,8 @@ func TestGlobalCellBudget(t *testing.T) {
 	if got := sum.KPIs.ByClass[logline.Class4xx]; got != int64(total) {
 		t.Fatalf("total = %d, attendu %d", got, total)
 	}
-	if !containsWarning(sum.Warnings, "regroup") {
-		t.Errorf("avertissement de regroupement absent : %v", sum.Warnings)
+	if !sum.Capped {
+		t.Error("plafond atteint mais non signalé")
 	}
 }
 

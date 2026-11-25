@@ -1,5 +1,10 @@
-import { describe, expect, it } from 'vitest'
-import { ago, countryName, formatBytes, formatClock, formatCount, formatDuration, formatMs, formatRps, pluriel, remaining } from './format'
+import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { ago, countryName, formatBytes, formatClock, formatCount, formatDayTime, formatDuration, formatMs, formatRps, percent, remaining } from './format'
+import { setLang, tn } from './i18n.svelte'
+
+// Ces tests décrivent le rendu français ; l'anglais a son bloc à la fin.
+beforeAll(() => setLang('fr', false))
+afterAll(() => setLang('en', false))
 
 // Espace fine insécable : séparateur de milliers et espace avant l'unité.
 const S = ' '
@@ -87,9 +92,10 @@ describe('divers', () => {
     expect(countryName('ZZZ')).toBe('ZZZ')
   })
   it('accorde', () => {
-    expect(pluriel(0, 'IP inconnue', 'IP inconnues')).toBe('0 IP inconnue')
-    expect(pluriel(1, 'IP inconnue', 'IP inconnues')).toBe('1 IP inconnue')
-    expect(pluriel(2, 'IP inconnue', 'IP inconnues')).toBe('2 IP inconnues')
+    expect(tn('ips.unknownCount', 0)).toBe('0 inconnue')
+    expect(tn('ips.unknownCount', 1)).toBe('1 inconnue')
+    expect(tn('ips.unknownCount', 2)).toBe('2 inconnues')
+    expect(tn('common.requests', 1500)).toBe('1\u202f500 requêtes')
   })
   it("affiche l'heure locale sur deux chiffres", () => {
     expect(formatClock(new Date(2026, 10, 10, 9, 5, 7))).toBe('09:05:07')
@@ -109,5 +115,36 @@ describe('remaining', () => {
     expect(remaining('2026-11-11T11:00:00Z', now)).toBe('expiré')
     expect(remaining('0001-01-01T00:00:00Z', now)).toBe('—')
     expect(remaining('', now)).toBe('—')
+  })
+})
+
+describe('en anglais', () => {
+  beforeAll(() => setLang('en', false))
+  afterAll(() => setLang('fr', false))
+  it('formate nombres, volumes et pourcentages', () => {
+    expect(formatCount(110742)).toBe('110,742')
+    expect(formatBytes(1536)).toBe('1.5\u202fkB')
+    expect(formatBytes(0)).toBe('0\u202fB')
+    expect(formatRps(1.26)).toBe('1.3')
+    expect(formatMs(2100)).toBe('2.1\u202fs')
+    expect(percent(1, 3)).toBe('33%')
+  })
+  it('formate les dates relatives', () => {
+    const now = new Date('2026-11-10T12:00:00Z')
+    expect(ago('2026-11-10T11:59:59Z', now)).toBe('just now')
+    expect(ago('2026-11-10T11:57:00Z', now)).toBe('3 min ago')
+    expect(ago('2026-11-10T09:55:00Z', now)).toBe('2 h 05 min ago')
+    expect(ago('', now)).toBe('never')
+    expect(remaining('2026-11-10T12:00:30Z', now)).toBe('in 30 s')
+    expect(remaining('2026-11-10T11:00:00Z', now)).toBe('expired')
+  })
+  it('nomme les pays et les jours', () => {
+    expect(countryName('BR')).toBe('Brazil')
+    expect(formatDayTime(new Date(2026, 10, 10, 9, 5))).toBe('Nov 10 09:05')
+  })
+  it('accorde', () => {
+    expect(tn('common.requests', 1)).toBe('1 request')
+    expect(tn('common.requests', 0)).toBe('0 requests')
+    expect(tn('ips.addresses', 2)).toBe('2 addresses')
   })
 })

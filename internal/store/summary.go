@@ -13,12 +13,12 @@ import (
 
 // Verdicts d'une IP sur la période.
 const (
-	VerdictKnown   = "connue"  // toutes ses requêtes sont couvertes par une règle de nom
-	VerdictSuccess = "succès"  // au moins un succès hors URL anonyme : rouge
+	VerdictKnown   = "known"   // toutes ses requêtes sont couvertes par une règle de nom
+	VerdictSuccess = "success" // au moins un succès hors URL anonyme : rouge
 	VerdictPublic  = "public"  // succès uniquement sur des URL anonymes
-	VerdictBlocked = "bloquée" // des 403, aucun autre 4xx, aucun succès
-	VerdictProbing = "tâtonne" // des 4xx hors 403, aucun succès
-	VerdictOther   = "autre"   // ni succès ni 4xx (redirections, 5xx, abandons)
+	VerdictBlocked = "blocked" // des 403, aucun autre 4xx, aucun succès
+	VerdictProbing = "probing" // des 4xx hors 403, aucun succès
+	VerdictOther   = "other"   // ni succès ni 4xx (redirections, 5xx, abandons)
 )
 
 const (
@@ -67,6 +67,9 @@ type Summary struct {
 	Sensitive   []Sensitive  `json:"sensitive"`
 	Counts      Counts       `json:"counts"`
 	Warnings    []string     `json:"warnings"`
+	// Capped : le plafond mémoire a été atteint sur la période (l'API en fait un
+	// avertissement traduit).
+	Capped bool `json:"-"`
 	// Renseignés par l'API.
 	Loading bool `json:"loading"` // relecture des archives en cours
 }
@@ -399,7 +402,7 @@ const (
 )
 
 // ErrRange : intervalle vide, inversé ou entièrement hors des 7 jours gardés.
-var ErrRange = errors.New("intervalle invalide")
+var ErrRange = errors.New("invalid range")
 
 func rangePlan(r Range, now time.Time) (plan, error) {
 	nowSec := now.Unix()
@@ -643,8 +646,7 @@ func (s *Store) summarize(p plan, now time.Time) Summary {
 	}
 
 	if s.capped != 0 && s.capped >= from {
-		sum.Warnings = append(sum.Warnings,
-			"Trafic exceptionnel : le plafond mémoire est atteint, une partie des IP et des URL est regroupée sous « autres ». Les totaux restent exacts.")
+		sum.Capped = true
 	}
 	return sum
 }

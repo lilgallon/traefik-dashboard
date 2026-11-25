@@ -57,14 +57,14 @@ func (w *Writer) login(ctx context.Context, force bool) (string, error) {
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("connexion à la LAPI CrowdSec refusée (HTTP %d) : compte machine %q absent ou mot de passe faux", resp.StatusCode, w.machineID)
+		return "", fmt.Errorf("CrowdSec LAPI login refused (HTTP %d): machine account %q missing or wrong password", resp.StatusCode, w.machineID)
 	}
 	var out struct {
 		Token  string    `json:"token"`
 		Expire time.Time `json:"expire"`
 	}
 	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&out); err != nil || out.Token == "" {
-		return "", errors.New("LAPI CrowdSec : réponse de connexion illisible")
+		return "", errors.New("CrowdSec LAPI: unreadable login response")
 	}
 	if out.Expire.IsZero() {
 		out.Expire = time.Now().Add(30 * time.Minute)
@@ -111,7 +111,7 @@ func (w *Writer) doLimit(ctx context.Context, method, path string, body []byte, 
 			continue
 		}
 		if resp.StatusCode/100 != 2 {
-			return nil, fmt.Errorf("LAPI CrowdSec : HTTP %d", resp.StatusCode)
+			return nil, fmt.Errorf("CrowdSec LAPI: HTTP %d", resp.StatusCode)
 		}
 		return data, nil
 	}

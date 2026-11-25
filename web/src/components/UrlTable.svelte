@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { Summary } from '../lib/api'
-  import { formatCount, pluriel } from '../lib/format'
+  import { formatCount } from '../lib/format'
+  import { t, tn } from '../lib/i18n.svelte'
   import { total } from '../lib/model'
   import ClassBar from './ClassBar.svelte'
 
@@ -15,31 +16,31 @@
 <section class="card" class:busy>
   <header class="card-head">
     <div>
-      <h2 class="card-title">URL les plus appelées</h2>
+      <h2 class="card-title">{t('urls.title')}</h2>
       <p class="card-sub">
-        {#if summary}{pluriel(summary.counts.urls, 'URL distincte', 'URL distinctes')} · identifiants remplacés par {'{id}'}{:else}&nbsp;{/if}
+        {#if summary}{tn('urls.count', summary.counts.urls)} · {t('urls.idHint', { token: '{id}' })}{:else}&nbsp;{/if}
       </p>
     </div>
   </header>
   {#if !summary}
     <div class="sk-rows">{#each Array(6) as _, i (i)}<span class="skeleton"></span>{/each}</div>
   {:else if summary.urls.length === 0}
-    <p class="empty">Aucune requête sur la période.</p>
+    <p class="empty">{t('common.noRequests')}</p>
   {:else}
     <div class="table-scroll">
       <table class="tbl">
         <thead>
           <tr>
-            <th scope="col">Hôte et chemin</th>
-            <th scope="col" class="num">Requêtes</th>
-            <th scope="col" class="share">Répartition</th>
+            <th scope="col">{t('urls.hostPath')}</th>
+            <th scope="col" class="num">{t('urls.requests')}</th>
+            <th scope="col" class="share">{t('urls.share')}</th>
             {#each cols as k (k)}<th scope="col" class="num"><i class="swatch" style:background="var(--c-{k})"></i>{k}</th>{/each}
           </tr>
         </thead>
         <tbody>
           {#each rows as u (u.host + u.path)}
             <tr>
-              <td class="url"><span class="host">{u.host || '(sans hôte)'}</span><span class="mono path">{u.path}</span>{#if u.sockets > 0}<span class="ws">dont {formatCount(u.sockets)} WebSocket{u.sockets > 1 ? 's' : ''} accepté{u.sockets > 1 ? 's' : ''} (journalisé{u.sockets > 1 ? 's' : ''} sans statut)</span>{/if}</td>
+              <td class="url"><span class="host">{u.host || t('common.noHost')}</span><span class="mono path">{u.path}</span>{#if u.sockets > 0}<span class="ws">{tn('urls.ws', u.sockets)}</span>{/if}</td>
               <td class="num strong">{formatCount(total(u.byClass))}</td>
               <td class="share"><ClassBar counts={u.byClass} /></td>
               {#each cols as k (k)}<td class="num" class:zero={u.byClass[k] === 0}>{formatCount(u.byClass[k])}</td>{/each}
@@ -50,7 +51,7 @@
     </div>
     {#if summary.urls.length > PAGE}
       <button type="button" class="more" onclick={() => (showAll = !showAll)}>
-        {showAll ? 'Réduire' : `Afficher les ${summary.urls.length - PAGE} suivantes`}
+        {showAll ? t('common.collapse') : t('urls.showMore', { n: summary.urls.length - PAGE })}
       </button>
     {/if}
   {/if}

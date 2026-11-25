@@ -20,6 +20,7 @@ import (
 	"unicode"
 
 	"github.com/lilgallon/traefik-dashboard/internal/crowdsec"
+	"github.com/lilgallon/traefik-dashboard/internal/i18n"
 	"github.com/lilgallon/traefik-dashboard/internal/store"
 )
 
@@ -35,8 +36,10 @@ type Config struct {
 	// Bans : bans CrowdSec en cours (dernier état connu) ; erreur si injoignable.
 	Bans func() (map[netip.Addr]store.Ban, error)
 	// Warnings : avertissements à afficher en tête de page (écarts de listes,
-	// names.yaml invalide, géolocalisation absente…).
-	Warnings func() []string
+	// names.yaml invalide, géolocalisation absente…), traduits à chaque requête.
+	Warnings func() []i18n.Msg
+	// Lang : langue par défaut, quand Accept-Language n'en demande aucune connue.
+	Lang i18n.Lang
 	// Ready : la relecture des archives est terminée.
 	Ready     func() bool
 	Now       func() time.Time
@@ -46,8 +49,8 @@ type Config struct {
 	// Blocker pose et lève les bans demandés depuis la page ; nil = blocage
 	// désactivé (aucun compte machine CrowdSec configuré).
 	Blocker Blocker
-	// Protected dit pourquoi une IP ne doit pas être bannie ("" = autorisé).
-	Protected func(ip netip.Addr) string
+	// Protected dit pourquoi une IP ne doit pas être bannie (message vide = autorisé).
+	Protected func(ip netip.Addr) i18n.Msg
 	// CrowdSec : bloc CrowdSec des alertes de [from, to] (plus les bans en cours) ;
 	// nil = absent.
 	CrowdSec func(from, to time.Time) *crowdsec.View
@@ -73,6 +76,10 @@ var BanDurations = map[string]time.Duration{
 	"7d":  7 * 24 * time.Hour,
 	"30d": 30 * 24 * time.Hour,
 }
+
+// ManualReason commence le motif des bans posés depuis la page (suivi du motif
+// saisi). Stocké dans CrowdSec, il reste en anglais.
+const ManualReason = "manual (dashboard)"
 
 // WriteHeader est l'en-tête que la page envoie avec chaque écriture. Une page
 // d'un autre site ne peut pas le poser sans requête préalable CORS, que ce
@@ -100,7 +107,10 @@ func New(cfg Config) *Server {
 		cfg.Ready = func() bool { return true }
 	}
 	if cfg.Warnings == nil {
-		cfg.Warnings = func() []string { return nil }
+		cfg.Warnings = func() []i18n.Msg { return nil }
+	}
+	if cfg.Lang == "" {
+		cfg.Lang = i18n.EN
 	}
 	if cfg.StartedAt.IsZero() {
 		cfg.StartedAt = cfg.Now()
@@ -113,10 +123,10 @@ func New(cfg Config) *Server {
 	s.mux.HandleFunc("DELETE /api/ip/{ip}/ban", s.handleUnban)
 	s.mux.HandleFunc("GET /health", s.handleHealth)
 	s.mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
-		if !readOnly(w, r) {
+		if !s.readOnly(w, r) {
 			return
 		}
-		writeError(w, http.StatusNotFound, "route inconnue")
+		s.fail(w, r, http.StatusNotFound, "api.route_unknown")
 	})
 	s.mux.HandleFunc("/", s.handleStatic)
 	go s.broadcast()
@@ -152,6 +162,16 @@ func writeJSON(w http.ResponseWriter, r *http.Request, status int, v any) {
 	_ = json.NewEncoder(w).Encode(v)
 }
 
+// lang est la langue de la requête : Accept-Language, à défaut celle du service.
+func (s *Server) lang(r *http.Request) i18n.Lang {
+	return i18n.FromAcceptLanguage(r.Header.Get("Accept-Language"), s.cfg.Lang)
+}
+
+// fail répond une erreur traduite dans la langue de la requête.
+func (s *Server) fail(w http.ResponseWriter, r *http.Request, status int, key string, args ...any) {
+	writeError(w, status, i18n.T(s.lang(r), key, args...))
+}
+
 func writeError(w http.ResponseWriter, status int, msg string) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
@@ -165,8 +185,6 @@ type period struct {
 	win store.Window
 	rng *store.Range
 }
-
-const periodError = "période inconnue : window=1h, 24h ou 7d, ou from et to (secondes Unix)"
 
 func parsePeriod(r *http.Request) (period, bool) {
 	q := r.URL.Query()
@@ -189,10 +207,13 @@ func parsePeriod(r *http.Request) (period, bool) {
 // avertissements. Sert aussi au résumé quotidien.
 func (s *Server) Summary(w store.Window) store.Summary {
 	now := s.cfg.Now()
-	return s.decorate(s.cfg.Store.Summary(w, now), now)
+	return s.decorate(s.cfg.Store.Summary(w, now), now, s.cfg.Lang)
 }
 
-func (s *Server) decorate(sum store.Summary, now time.Time) store.Summary {
+func (s *Server) decorate(sum store.Summary, now time.Time, l i18n.Lang) store.Summary {
+	if sum.Capped {
+		sum.Warnings = append(sum.Warnings, i18n.T(l, "warn.capped"))
+	}
 	sum.Loading = !s.cfg.Ready()
 
 	var bans map[netip.Addr]store.Ban
@@ -202,7 +223,7 @@ func (s *Server) decorate(sum store.Summary, now time.Time) store.Summary {
 	}
 	if s.cfg.Bans == nil || bansErr != nil {
 		sum.KPIs.ActiveBans = -1
-		sum.Warnings = append(sum.Warnings, "CrowdSec injoignable : les bans en cours ne sont pas affichés.")
+		sum.Warnings = append(sum.Warnings, i18n.T(l, "warn.crowdsec_unreachable"))
 	} else {
 		sum.KPIs.ActiveBans = len(bans)
 		for i := range sum.IPs {
@@ -214,13 +235,12 @@ func (s *Server) decorate(sum store.Summary, now time.Time) store.Summary {
 		}
 	}
 
-	sum.Warnings = append(sum.Warnings, s.cfg.Warnings()...)
+	sum.Warnings = append(sum.Warnings, i18n.Render(l, s.cfg.Warnings())...)
 	if !sum.Loading {
 		if sum.LastLine.IsZero() {
-			sum.Warnings = append(sum.Warnings, "Aucune ligne lue dans access.log : rien n'est surveillé.")
+			sum.Warnings = append(sum.Warnings, i18n.T(l, "warn.no_lines"))
 		} else if gap := now.Sub(sum.LastLine); gap > staleAfter {
-			sum.Warnings = append(sum.Warnings, fmt.Sprintf(
-				"Données en retard : la dernière ligne lue date d'il y a %d min. Le vert ci-dessous ne prouve rien.", int(gap/time.Minute)))
+			sum.Warnings = append(sum.Warnings, i18n.T(l, "warn.stale", int(gap/time.Minute)))
 		}
 	}
 	return sum
@@ -229,22 +249,23 @@ func (s *Server) decorate(sum store.Summary, now time.Time) store.Summary {
 func (s *Server) handleSummary(w http.ResponseWriter, r *http.Request) {
 	p, ok := parsePeriod(r)
 	if !ok {
-		writeError(w, http.StatusBadRequest, periodError)
+		s.fail(w, r, http.StatusBadRequest, "api.period_invalid")
 		return
 	}
+	l := s.lang(r)
 	now := s.cfg.Now()
 	var resp summaryResponse
 	csFrom, csTo := now.Add(-p.win.Duration()), now.Add(time.Minute)
 	if p.rng != nil {
 		sum, err := s.cfg.Store.SummaryRange(*p.rng, now)
 		if err != nil {
-			writeError(w, http.StatusBadRequest, "intervalle vide ou hors des 7 derniers jours")
+			s.fail(w, r, http.StatusBadRequest, "api.range_invalid")
 			return
 		}
-		resp.Summary = s.decorate(sum, now)
+		resp.Summary = s.decorate(sum, now, l)
 		csFrom, csTo = time.Unix(sum.Range.From, 0), time.Unix(sum.Range.To, 0)
 	} else {
-		resp.Summary = s.decorate(s.cfg.Store.Summary(p.win, now), now)
+		resp.Summary = s.decorate(s.cfg.Store.Summary(p.win, now), now, l)
 	}
 	if s.cfg.CrowdSec != nil {
 		resp.CrowdSec = s.cfg.CrowdSec(csFrom, csTo)
@@ -260,12 +281,12 @@ type summaryResponse struct {
 func (s *Server) handleIP(w http.ResponseWriter, r *http.Request) {
 	p, ok := parsePeriod(r)
 	if !ok {
-		writeError(w, http.StatusBadRequest, periodError)
+		s.fail(w, r, http.StatusBadRequest, "api.period_invalid")
 		return
 	}
 	ip, err := netip.ParseAddr(r.PathValue("ip"))
 	if err != nil {
-		writeError(w, http.StatusBadRequest, "adresse IP invalide")
+		s.fail(w, r, http.StatusBadRequest, "api.ip_invalid")
 		return
 	}
 	ip = ip.Unmap()
@@ -274,14 +295,14 @@ func (s *Server) handleIP(w http.ResponseWriter, r *http.Request) {
 	if p.rng != nil {
 		var err error
 		if d, found, err = s.cfg.Store.IPDetailRange(ip, *p.rng, s.cfg.Now()); err != nil {
-			writeError(w, http.StatusBadRequest, "intervalle vide ou hors des 7 derniers jours")
+			s.fail(w, r, http.StatusBadRequest, "api.range_invalid")
 			return
 		}
 	} else {
 		d, found = s.cfg.Store.IPDetail(ip, p.win, s.cfg.Now())
 	}
 	if !found {
-		writeError(w, http.StatusNotFound, "aucune requête de cette IP sur la période")
+		s.fail(w, r, http.StatusNotFound, "api.ip_no_requests")
 		return
 	}
 	if s.cfg.Bans != nil {
@@ -291,7 +312,7 @@ func (s *Server) handleIP(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	resp := ipResponse{IPDetail: d, Block: s.blockState(ip), Alerts: []crowdsec.Alert{}}
+	resp := ipResponse{IPDetail: d, Block: s.blockState(ip, s.lang(r)), Alerts: []crowdsec.Alert{}}
 	if s.cfg.IPAlerts != nil {
 		resp.Alerts = s.cfg.IPAlerts(ip)
 	}
@@ -310,10 +331,12 @@ type blockState struct {
 	Refused string `json:"refused,omitempty"` // pourquoi cette IP ne peut pas être bannie
 }
 
-func (s *Server) blockState(ip netip.Addr) blockState {
+func (s *Server) blockState(ip netip.Addr, l i18n.Lang) blockState {
 	b := blockState{Enabled: s.cfg.Blocker != nil}
 	if s.cfg.Protected != nil {
-		b.Refused = s.cfg.Protected(ip)
+		if m := s.cfg.Protected(ip); !m.IsZero() {
+			b.Refused = m.In(l)
+		}
 	}
 	return b
 }
@@ -321,23 +344,23 @@ func (s *Server) blockState(ip netip.Addr) blockState {
 // writeAllowed vérifie qu'une écriture vient bien de la page elle-même.
 func (s *Server) writeAllowed(w http.ResponseWriter, r *http.Request) bool {
 	if len(s.cfg.AllowedHosts) > 0 && !slices.Contains(s.cfg.AllowedHosts, r.Host) {
-		writeError(w, http.StatusForbidden, "hôte non autorisé : ouvrir la page par son adresse habituelle")
+		s.fail(w, r, http.StatusForbidden, "api.host_refused")
 		return false
 	}
 	if r.Header.Get(WriteHeader) == "" {
-		writeError(w, http.StatusForbidden, "en-tête "+WriteHeader+" absent")
+		s.fail(w, r, http.StatusForbidden, "api.header_missing", WriteHeader)
 		return false
 	}
 	if site := r.Header.Get("Sec-Fetch-Site"); site != "" && site != "same-origin" {
-		writeError(w, http.StatusForbidden, "requête d'un autre site refusée")
+		s.fail(w, r, http.StatusForbidden, "api.cross_site")
 		return false
 	}
 	if o := r.Header.Get("Origin"); o != "" && o != "http://"+r.Host && o != "https://"+r.Host {
-		writeError(w, http.StatusForbidden, "origine refusée")
+		s.fail(w, r, http.StatusForbidden, "api.origin_refused")
 		return false
 	}
 	if s.cfg.Blocker == nil {
-		writeError(w, http.StatusServiceUnavailable, "blocage désactivé : aucun compte machine CrowdSec configuré")
+		s.fail(w, r, http.StatusServiceUnavailable, "api.block_disabled")
 		return false
 	}
 	return true
@@ -372,11 +395,11 @@ func (s *Server) handleBan(w http.ResponseWriter, r *http.Request) {
 	}
 	ip, err := netip.ParseAddr(r.PathValue("ip"))
 	if err != nil || ip.Zone() != "" {
-		writeError(w, http.StatusBadRequest, "adresse IP invalide")
+		s.fail(w, r, http.StatusBadRequest, "api.ip_invalid")
 		return
 	}
 	ip = ip.Unmap()
-	if why := s.blockState(ip).Refused; why != "" {
+	if why := s.blockState(ip, s.lang(r)).Refused; why != "" {
 		writeError(w, http.StatusConflict, why)
 		return
 	}
@@ -385,17 +408,17 @@ func (s *Server) handleBan(w http.ResponseWriter, r *http.Request) {
 		Reason   string `json:"reason"`
 	}
 	if err := json.NewDecoder(io.LimitReader(r.Body, 4<<10)).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "corps JSON attendu : {\"duration\": \"24h\", \"reason\": \"…\"}")
+		s.fail(w, r, http.StatusBadRequest, "api.ban_body")
 		return
 	}
 	d, ok := BanDurations[req.Duration]
 	if !ok {
-		writeError(w, http.StatusBadRequest, "durée inconnue : 4h, 24h, 7d ou 30d")
+		s.fail(w, r, http.StatusBadRequest, "api.ban_duration")
 		return
 	}
-	reason := "manuel (tableau de bord)"
+	reason := ManualReason
 	if m := cleanReason(req.Reason); m != "" {
-		reason += " : " + m
+		reason += ": " + m
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 	defer cancel()
@@ -412,7 +435,7 @@ func (s *Server) handleUnban(w http.ResponseWriter, r *http.Request) {
 	}
 	ip, err := netip.ParseAddr(r.PathValue("ip"))
 	if err != nil || ip.Zone() != "" {
-		writeError(w, http.StatusBadRequest, "adresse IP invalide")
+		s.fail(w, r, http.StatusBadRequest, "api.ip_invalid")
 		return
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
@@ -544,15 +567,15 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	status := http.StatusOK
 	switch {
 	case !s.cfg.Ready():
-		body["status"] = "relecture des archives en cours"
+		body["status"] = "backfill in progress"
 		if now.Sub(s.cfg.StartedAt) > backfillBudget {
 			status = http.StatusServiceUnavailable
 		}
 	case last.IsZero():
-		body["status"] = "aucune ligne lue dans access.log"
+		body["status"] = "no line read from access.log"
 		status = http.StatusServiceUnavailable
 	case now.Sub(last) >= staleAfter:
-		body["status"] = fmt.Sprintf("dernière ligne lue il y a %d min", int(now.Sub(last)/time.Minute))
+		body["status"] = fmt.Sprintf("last line read %d min ago", int(now.Sub(last)/time.Minute))
 		status = http.StatusServiceUnavailable
 	}
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
@@ -563,17 +586,17 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 
 // readOnly refuse tout ce qui n'est pas une lecture (seuls les bans s'écrivent,
 // par leurs routes dédiées).
-func readOnly(w http.ResponseWriter, r *http.Request) bool {
+func (s *Server) readOnly(w http.ResponseWriter, r *http.Request) bool {
 	if r.Method == http.MethodGet || r.Method == http.MethodHead {
 		return true
 	}
 	w.Header().Set("Allow", "GET, HEAD")
-	writeError(w, http.StatusMethodNotAllowed, "lecture seule")
+	s.fail(w, r, http.StatusMethodNotAllowed, "api.read_only")
 	return false
 }
 
 func (s *Server) handleStatic(w http.ResponseWriter, r *http.Request) {
-	if !readOnly(w, r) {
+	if !s.readOnly(w, r) {
 		return
 	}
 	if s.cfg.Static == nil {

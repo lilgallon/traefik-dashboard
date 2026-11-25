@@ -2,8 +2,9 @@
   import { untrack } from 'svelte'
   import uPlot from 'uplot'
   import type { TimeRange } from '../lib/api'
-  import { formatClock, formatDayTime, formatRps } from '../lib/format'
-  import { STACK, type ChartData } from '../lib/model'
+  import { formatClock, formatDay, formatDayTime, formatRps } from '../lib/format'
+  import { lang, t } from '../lib/i18n.svelte'
+  import { classLabel, STACK, type ChartData } from '../lib/model'
 
   let {
     data,
@@ -33,7 +34,7 @@
   let width = $state(0)
 
   const granularity = $derived(
-    (step <= 1 ? 'à la seconde' : step <= 60 ? 'moyenne par minute' : 'moyenne par heure') + (live ? ', en direct' : ''),
+    (step <= 1 ? t('chart.perSecond') : step <= 60 ? t('chart.perMinute') : t('chart.perHour')) + (live ? t('chart.live') : ''),
   )
   const empty = $derived(!!data && data.stacked.length > 0 && data.stacked[data.stacked.length - 1].every((v) => v === 0))
 
@@ -46,7 +47,7 @@
   const two = (n: number) => String(n).padStart(2, '0')
   function tickLabel(sec: number): string {
     const d = new Date(sec * 1000)
-    if (d.getHours() === 0 && d.getMinutes() === 0) return `${two(d.getDate())}/${two(d.getMonth() + 1)}`
+    if (d.getHours() === 0 && d.getMinutes() === 0) return formatDay(d)
     return `${two(d.getHours())}:${two(d.getMinutes())}`
   }
 
@@ -93,7 +94,7 @@
           .map((s) => {
             const color = v(s.cssVar)
             return {
-              label: s.label,
+              label: classLabel(s.key),
               stroke: color,
               width: 1,
               fill: color + 'd9',
@@ -125,10 +126,12 @@
     return new uPlot(opts, toPlot(d), el)
   }
 
-  // (Re)création : au premier rendu, et quand le thème change (couleurs lues dans le CSS).
+  // (Re)création : au premier rendu, et quand le thème (couleurs lues dans le CSS) ou
+  // la langue (libellés des axes) change.
   const hasData = $derived(data !== null)
   $effect(() => {
     void theme
+    void lang()
     const el = host
     if (!el || !hasData) return
     // Les données suivantes passent par setData (effet ci-dessous) : les lire ici
@@ -173,26 +176,26 @@
 <section class="card chart" class:busy>
   <header class="card-head">
     <div>
-      <h2 class="card-title">Requêtes par seconde</h2>
-      <p class="card-sub">par famille de statut · {granularity} · <span class="hint">glisser pour zoomer sur un intervalle</span></p>
+      <h2 class="card-title">{t('kpi.rps')}</h2>
+      <p class="card-sub">{t('chart.byClass')} · {granularity} · <span class="hint">{t('chart.dragHint')}</span></p>
     </div>
-    <ul class="legend" aria-label="Légende">
+    <ul class="legend" aria-label={t('chart.legend')}>
       {#each STACK as s (s.key)}
-        <li><i class="swatch" style:background="var({s.cssVar})"></i>{s.label}</li>
+        <li><i class="swatch" style:background="var({s.cssVar})"></i>{classLabel(s.key)}</li>
       {/each}
     </ul>
   </header>
   <div class="plot-wrap">
     {#if data}
-      <div class="plot" bind:this={host} role="img" aria-label="Graphique des requêtes par seconde, empilées par famille de statut. Les mêmes chiffres figurent dans les indicateurs et les tableaux."></div>
-      {#if empty}<p class="none">Aucune requête sur la période</p>{/if}
+      <div class="plot" bind:this={host} role="img" aria-label={t('chart.aria')}></div>
+      {#if empty}<p class="none">{t('chart.empty')}</p>{/if}
       {#if tip}
         <div class="tip" class:flip={tip.flip} style:left="{tip.left}px" aria-hidden="true">
           <p class="when">{tip.when}</p>
           {#each tip.rows as r (r.key)}
-            <p class:nil={r.value === 0}><i class="swatch" style:background="var({r.cssVar})"></i>{r.label}<b>{formatRps(r.value)}</b></p>
+            <p class:nil={r.value === 0}><i class="swatch" style:background="var({r.cssVar})"></i>{classLabel(r.key)}<b>{formatRps(r.value)}</b></p>
           {/each}
-          <p class="sum">total<b>{formatRps(tip.sum)}</b></p>
+          <p class="sum">{t('chart.total')}<b>{formatRps(tip.sum)}</b></p>
         </div>
       {/if}
     {:else}

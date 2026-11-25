@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/lilgallon/traefik-dashboard/internal/geo"
+	"github.com/lilgallon/traefik-dashboard/internal/i18n"
 	"github.com/lilgallon/traefik-dashboard/internal/logline"
 	"github.com/lilgallon/traefik-dashboard/internal/store"
 )
@@ -49,7 +50,7 @@ var mobile = store.Identity{LooksLike: "Mon téléphone", Geo: geo.Info{Country:
 func TestWatcherUnknownSuccessOncePer24h(t *testing.T) {
 	state := filepath.Join(t.TempDir(), "alerts.json")
 	n := &fakeNotifier{}
-	w := NewWatcher(n, state, pageURL)
+	w := NewWatcher(n, state, pageURL, i18n.FR)
 
 	w.Observe(live(now, "198.51.100.1", "homeassistant", "/api/states/<x>?a=1&b=2", 200), mobile)
 	w.Observe(live(now.Add(time.Minute), "198.51.100.1", "homeassistant", "/api/config", 200), mobile)
@@ -76,7 +77,7 @@ func TestWatcherUnknownSuccessOncePer24h(t *testing.T) {
 
 	// Redémarrage : l'état sur disque évite de réalerter.
 	n2 := &fakeNotifier{}
-	w2 := NewWatcher(n2, state, pageURL)
+	w2 := NewWatcher(n2, state, pageURL, i18n.FR)
 	w2.Observe(live(now.Add(2*time.Hour), "198.51.100.1", "homeassistant", "/api/states/x", 200), mobile)
 	if got := len(n2.messages()); got != 0 {
 		t.Fatalf("après redémarrage : %d envois", got)
@@ -90,7 +91,7 @@ func TestWatcherUnknownSuccessOncePer24h(t *testing.T) {
 
 func TestWatcherIgnoresNamedAndAnonymous(t *testing.T) {
 	n := &fakeNotifier{}
-	w := NewWatcher(n, filepath.Join(t.TempDir(), "alerts.json"), pageURL)
+	w := NewWatcher(n, filepath.Join(t.TempDir(), "alerts.json"), pageURL, i18n.FR)
 	w.Observe(live(now, "203.0.113.10", "homeassistant", "/api/states/x", 200), store.Identity{Name: "Maison"})
 	w.Observe(live(now, "198.51.100.1", "homeassistant", "/", 200), store.Identity{Anonymous: true})
 	w.Observe(live(now, "198.51.100.1", "homeassistant", "/api/states/x", 401), store.Identity{})
@@ -104,7 +105,7 @@ func TestWatcherIgnoresNamedAndAnonymous(t *testing.T) {
 func TestWatcherSurvivesNotifierAndStateErrors(t *testing.T) {
 	n := &fakeNotifier{err: errors.New("telegram injoignable")}
 	// État dans un dossier inexistant : rien ne doit planter.
-	w := NewWatcher(n, "/nexiste/pas/alerts.json", pageURL)
+	w := NewWatcher(n, "/nexiste/pas/alerts.json", pageURL, i18n.FR)
 	w.Observe(live(now, "198.51.100.1", "homeassistant", "/api/states/x", 200), store.Identity{})
 	if got := len(n.messages()); got != 1 {
 		t.Fatalf("%d tentatives", got)
@@ -114,7 +115,7 @@ func TestWatcherSurvivesNotifierAndStateErrors(t *testing.T) {
 	state := filepath.Join(t.TempDir(), "alerts.json")
 	os.WriteFile(state, []byte("{pas du json"), 0o644)
 	n2 := &fakeNotifier{}
-	w2 := NewWatcher(n2, state, pageURL)
+	w2 := NewWatcher(n2, state, pageURL, i18n.FR)
 	w2.Observe(live(now, "198.51.100.1", "homeassistant", "/api/states/x", 200), store.Identity{})
 	if got := len(n2.messages()); got != 1 {
 		t.Fatalf("état corrompu : %d envois", got)
@@ -123,7 +124,7 @@ func TestWatcherSurvivesNotifierAndStateErrors(t *testing.T) {
 
 func TestWatcherOnlyUnknownSuccess(t *testing.T) {
 	n := &fakeNotifier{}
-	w := NewWatcher(n, filepath.Join(t.TempDir(), "alerts.json"), pageURL)
+	w := NewWatcher(n, filepath.Join(t.TempDir(), "alerts.json"), pageURL, i18n.FR)
 	// Chemin sensible servi sur une URL anonyme, rafale de 404, pic de 5xx : rien.
 	w.Observe(live(now, "198.51.100.1", "gotify", "/.env", 200), store.Identity{Anonymous: true})
 	for i := 0; i < 500; i++ {

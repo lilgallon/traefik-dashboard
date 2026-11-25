@@ -51,38 +51,38 @@ func Parse(b []byte) (*Rules, error) {
 	dec := yaml.NewDecoder(bytes.NewReader(b))
 	dec.KnownFields(true)
 	if err := dec.Decode(&r); err != nil {
-		return nil, fmt.Errorf("names.yaml illisible : %w", err)
+		return nil, fmt.Errorf("names.yaml unreadable: %w", err)
 	}
 	if len(r.Names) == 0 {
-		return nil, errors.New("names.yaml : aucune règle sous « names »")
+		return nil, errors.New("names.yaml: no rule under \"names\"")
 	}
 	for i := range r.Names {
 		n := &r.Names[i]
 		if strings.TrimSpace(n.Name) == "" {
-			return nil, fmt.Errorf("names.yaml : règle n° %d sans « name »", i+1)
+			return nil, fmt.Errorf("names.yaml: rule #%d has no \"name\"", i+1)
 		}
 		if len(n.RawIPs) == 0 && len(n.ASNs) == 0 {
-			return nil, fmt.Errorf("names.yaml : « %s » n'a ni « ip » ni « asn »", n.Name)
+			return nil, fmt.Errorf("names.yaml: %q has neither \"ip\" nor \"asn\"", n.Name)
 		}
 		for _, s := range n.RawIPs {
 			p, err := parsePrefix(s)
 			if err != nil {
-				return nil, fmt.Errorf("names.yaml : « %s » : %w", n.Name, err)
+				return nil, fmt.Errorf("names.yaml: %q: %w", n.Name, err)
 			}
 			n.IPs = append(n.IPs, p)
 		}
 		for _, l := range n.Lists {
 			if strings.TrimSpace(l) == "" || strings.Contains(l, "@") {
-				return nil, fmt.Errorf("names.yaml : « %s » : nom de liste « %s » invalide (« crowdsec » ou nom d'un middleware Traefik, sans « @file »)", n.Name, l)
+				return nil, fmt.Errorf("names.yaml: %q: invalid list name %q (\"crowdsec\" or a Traefik middleware name, without \"@file\")", n.Name, l)
 			}
 		}
 		if len(n.Lists) > 0 && len(n.ASNs) > 0 {
-			return nil, fmt.Errorf("names.yaml : « %s » : une règle avec « lists » ne peut pas porter d'« asn »", n.Name)
+			return nil, fmt.Errorf("names.yaml: %q: a rule with \"lists\" cannot have \"asn\"", n.Name)
 		}
 	}
 	for i, a := range r.Anon {
 		if a.Router == "" {
-			return nil, fmt.Errorf("names.yaml : URL anonymes n° %d sans « router »", i+1)
+			return nil, fmt.Errorf("names.yaml: anonymous URLs #%d have no \"router\"", i+1)
 		}
 	}
 	return &r, nil
@@ -94,13 +94,13 @@ func parsePrefix(s string) (netip.Prefix, error) {
 	if strings.Contains(s, "/") {
 		p, err := netip.ParsePrefix(s)
 		if err != nil {
-			return netip.Prefix{}, fmt.Errorf("CIDR « %s » invalide", s)
+			return netip.Prefix{}, fmt.Errorf("invalid CIDR %q", s)
 		}
 		return netip.PrefixFrom(p.Addr().Unmap(), p.Bits()).Masked(), nil
 	}
 	a, err := netip.ParseAddr(s)
 	if err != nil {
-		return netip.Prefix{}, fmt.Errorf("IP « %s » invalide", s)
+		return netip.Prefix{}, fmt.Errorf("invalid IP %q", s)
 	}
 	a = a.Unmap()
 	return netip.PrefixFrom(a, a.BitLen()), nil

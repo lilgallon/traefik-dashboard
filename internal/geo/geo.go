@@ -42,12 +42,12 @@ type DB struct {
 func Open(cityPath, asnPath string) (*DB, error) {
 	city, err := maxminddb.Open(cityPath)
 	if err != nil {
-		return nil, fmt.Errorf("base pays : %w", err)
+		return nil, fmt.Errorf("city database: %w", err)
 	}
 	asn, err := maxminddb.Open(asnPath)
 	if err != nil {
 		city.Close()
-		return nil, fmt.Errorf("base ASN : %w", err)
+		return nil, fmt.Errorf("ASN database: %w", err)
 	}
 	return &DB{city: city, asn: asn, cache: make(map[netip.Addr]Info)}, nil
 }

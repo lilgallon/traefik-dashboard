@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/lilgallon/traefik-dashboard/internal/i18n"
 	"github.com/lilgallon/traefik-dashboard/internal/logline"
 	"github.com/lilgallon/traefik-dashboard/internal/store"
 )
@@ -34,18 +35,18 @@ func sampleSummary() store.Summary {
 }
 
 func TestDailyText(t *testing.T) {
-	txt := DailyText(sampleSummary(), pageURL)
+	txt := DailyText(sampleSummary(), pageURL, i18n.FR)
 	for _, want := range []string{
-		"111 717",           // total des requêtes, séparateur de milliers
-		"2xx 110 742",       // statuts
-		"abandons 7",        //
-		"n8n : 4",           // 5xx par router
-		"198.51.100.1",      // IP en succès
-		"203.0.113.9",       // top IP non nommées
-		"http-probing",      // ban
-		"3 ban",             // bans en cours
-		pageURL,             // lien
-		"28 IP non nommées", //
+		"111\u202f717",     // total des requêtes, séparateur de milliers
+		"2xx 110\u202f742", // statuts
+		"abandons 7",       //
+		"n8n : 4",          // 5xx par router
+		"198.51.100.1",     // IP en succès
+		"203.0.113.9",      // top IP non nommées
+		"http-probing",     // ban
+		"3 ban",            // bans en cours
+		pageURL,            // lien
+		"28 non nommées",   //
 	} {
 		if !strings.Contains(txt, want) {
 			t.Errorf("résumé sans %q :\n%s", want, txt)
@@ -59,8 +60,21 @@ func TestDailyText(t *testing.T) {
 	}
 }
 
+func TestDailyTextEnglish(t *testing.T) {
+	txt := DailyText(sampleSummary(), pageURL, i18n.EN)
+	for _, want := range []string{
+		"last 24 h", "1 unknown IP got a success", "111,717", "2xx 110,742", "aborted 7",
+		"n8n: 4", "28 unnamed", "3 current bans", "blocked, banned (crowdsecurity/http-probing)",
+		"Volume: 1.5 kB in, 1.2 GB out", "Open the dashboard",
+	} {
+		if !strings.Contains(txt, want) {
+			t.Errorf("summary without %q:\n%s", want, txt)
+		}
+	}
+}
+
 func TestDailyTextEscapes(t *testing.T) {
-	txt := DailyText(sampleSummary(), pageURL)
+	txt := DailyText(sampleSummary(), pageURL, i18n.FR)
 	if strings.Contains(txt, "<script>") || strings.Contains(txt, "<b>Corp</b>") {
 		t.Fatalf("HTML non échappé :\n%s", txt)
 	}
@@ -76,7 +90,7 @@ func TestDailyTextQuietDay(t *testing.T) {
 	s.Services[1].Err5xx = 0
 	s.KPIs.ByClass[logline.Class5xx] = 0
 	s.KPIs.ActiveBans = -1
-	txt := DailyText(s, pageURL)
+	txt := DailyText(s, pageURL, i18n.FR)
 	for _, want := range []string{"Aucune IP inconnue n'a obtenu de succès", "Aucune erreur 5xx", "CrowdSec injoignable"} {
 		if !strings.Contains(txt, want) {
 			t.Errorf("résumé calme sans %q :\n%s", want, txt)

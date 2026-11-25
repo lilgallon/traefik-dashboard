@@ -1,11 +1,12 @@
 <script lang="ts">
+  import { t } from '../lib/i18n.svelte'
   import Icon from './Icon.svelte'
 
   let { items }: { items: string[] } = $props()
 </script>
 
 {#if items.length > 0}
-  <ul class="warnings" aria-label="Avertissements">
+  <ul class="warnings" aria-label={t('warnings.aria')}>
     {#each items as w (w)}
       <li><Icon name="alert" size={15} /><span>{w}</span></li>
     {/each}

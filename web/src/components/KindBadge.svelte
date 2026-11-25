@@ -1,13 +1,13 @@
 <script lang="ts">
   import type { AlertKind } from '../lib/api'
-  import { ALERT_KIND } from '../lib/model'
-
+  import { t } from '../lib/i18n.svelte'
+  import { alertKind } from '../lib/model'
   let { kind, manual = false }: { kind: AlertKind; manual?: boolean } = $props()
 
-  const m = $derived(ALERT_KIND[kind] ?? ALERT_KIND.alerte)
+  const m = $derived(alertKind(kind))
 </script>
 
-<span class="kind {m.tone}" title={manual ? 'Ban posé à la main (cscli ou cette page)' : m.title}>{manual ? 'manuel' : m.label}</span>
+<span class="kind {m.tone}" title={manual ? t('kind.manual.title') : m.title}>{manual ? t('kind.manual') : m.label}</span>
 
 <style>
   .kind {
