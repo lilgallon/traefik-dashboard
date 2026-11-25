@@ -1,0 +1,4 @@
+testdata/geo/
+web/node_modules/
+web/dist/*
+!web/dist/.gitkeep

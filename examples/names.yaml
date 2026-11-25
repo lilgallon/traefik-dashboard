@@ -1,0 +1,72 @@
+# names.yaml: who is who, and which URLs are public by design.
+#
+# Reloaded within 10 seconds of any change, no restart needed. Verdicts are then
+# recomputed over the whole period (past red from a newly named IP disappears).
+# An invalid file is rejected: the previous rules stay active and a warning is
+# shown at the top of the page.
+#
+# ── Naming an IP ─────────────────────────────────────────────────────────────────
+# Click an IP in the dashboard: its detail shows the ASN, URLs, user agents and a
+# ready-to-paste rule.
+#
+#   - name: My phone                   # required
+#     ip: [192.0.2.10, 2001:db8::/48]  # exact IPs or CIDRs
+#     asn: [64500]                     # autonomous system numbers (needs GeoLite2-ASN)
+#     routers: [homeassistant]         # optional: Traefik router names (without "@file")
+#     paths: [/api/webhook/]           # optional: path prefixes
+#     lists: [crowdsec, partners]      # optional: trust lists (see below)
+#
+# At least `ip` or `asn` is required; if both are given, either one matches.
+# `routers` and `paths`, when present, must match too. The first matching rule wins.
+#
+# Rules apply PER REQUEST, not to the whole IP: a cloud IP calling /api/webhook/ is
+# "Netatmo", but if it calls /api/states/, that request counts as unknown. An ASN
+# is shared by thousands of customers: always narrow ASN rules with `routers` (and
+# `paths` when possible).
+#
+# Paths are compared without the query string, after identifiers have been
+# replaced by "{id}" (as shown in the URL column): write /api/webhook/, not
+# /api/webhook/25a3d4….
+#
+# ── Trust lists ──────────────────────────────────────────────────────────────────
+# A rule's `ip` entries (never its `asn`) can be declared as members of a list. The
+# dashboard then checks every 10 seconds that the real configuration matches, and
+# shows a warning for every difference:
+#   crowdsec   → the CrowdSec whitelist file (CROWDSEC_WHITELIST)
+#   any other  → the Traefik ipAllowList middleware with that name, in the dynamic
+#                configuration file (TRAEFIK_DYNAMIC)
+# Lists that no rule uses are not checked.
+
+names:
+  - name: Home
+    ip: [192.0.2.10, "2001:db8:1::/64"]
+    lists: [crowdsec, partners]
+  - name: LAN
+    ip: [10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16]
+    lists: [crowdsec]
+  - name: Partner API
+    ip: [198.51.100.0/28]
+    lists: [crowdsec, partners]
+  - name: My phone
+    asn: [64500]
+    routers: [homeassistant]
+  - name: Netatmo
+    asn: [8075]
+    routers: [homeassistant]
+    paths: [/api/webhook/]
+
+# ── URLs that are anonymous by design ────────────────────────────────────────────
+# Surfaces that answer 200 to anyone without it being a problem. A success from an
+# unknown IP OUTSIDE these paths turns the verdict red.
+#   - router: <name>         # required
+#     exact: [/]             # exact paths
+#     prefixes: [/static/]   # path prefixes
+# Without `exact` or `prefixes`, the whole router is anonymous.
+
+anonymous:
+  - router: homeassistant
+    exact: [/, /manifest.json]
+    prefixes: [/frontend_latest/, /static/, /auth/authorize]
+  - router: uptime-kuma
+  - router: n8n-webhooks
+    prefixes: [/webhook/, /form/]

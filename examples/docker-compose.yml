@@ -1,0 +1,60 @@
+# Example deployment next to Traefik and CrowdSec.
+#
+# Traefik must write JSON access logs to a file, for example in traefik.yml:
+#   accessLog:
+#     filePath: /logs/access.log
+#     format: json
+#     fields:
+#       headers:
+#         names:
+#           User-Agent: keep
+#
+# NEVER expose this dashboard to the Internet: it has no authentication (yet).
+# Publish it on a LAN address only, or put it behind an authenticating proxy.
+
+services:
+  traefik-dashboard:
+    image: ghcr.io/lilgallon/traefik-dashboard:0.1.0
+    container_name: traefik-dashboard
+    restart: unless-stopped
+    user: "1000:1000"
+    ports:
+      - "192.168.1.2:8080:8080"  # LAN address of the host
+    environment:
+      - PUBLIC_URL=http://192.168.1.2:8080
+      # Optional: CrowdSec (bans, alerts, WAF). Without a bouncer key, the CrowdSec
+      # panel shows as unavailable.
+      - CROWDSEC_LAPI_URL=http://crowdsec:8080
+      - CROWDSEC_BOUNCER_KEY=${CROWDSEC_BOUNCER_KEY}
+      # Optional: machine account to read alerts and ban / unban from the page.
+      # Empty = read-only.
+      - CROWDSEC_MACHINE_PASSWORD=${CROWDSEC_MACHINE_PASSWORD:-}
+      # Optional: trust-list consistency checks (see names.yaml).
+      - CROWDSEC_WHITELIST=/crowdsec/whitelist.yaml
+      - TRAEFIK_DYNAMIC=/traefik/dynamic.yml
+      # Optional: Telegram alerts.
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
+      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID:-}
+    volumes:
+      # The whole directory: rotated archives (access.log.1, access.log.2.gz…) are
+      # read at startup.
+      - ./traefik/logs:/logs:ro
+      # Directories rather than files, so that edits replacing the inode are seen.
+      - ./traefik-dashboard:/config:ro            # names.yaml
+      - ./crowdsec/parsers/s02-enrich:/crowdsec:ro
+      - ./traefik/dynamic:/traefik:ro
+      # GeoLite2-City.mmdb and GeoLite2-ASN.mmdb. CrowdSec downloads them into
+      # its data directory, which can be reused here.
+      - crowdsec-data:/geo:ro
+      # Alert de-duplication state.
+      - ./traefik-dashboard-state:/state
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 256m
+
+volumes:
+  crowdsec-data:
+    external: true
