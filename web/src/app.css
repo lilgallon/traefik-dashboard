@@ -1,0 +1,382 @@
+/* Jetons de couleur, clair et sombre. Aucune ressource externe : polices système. */
+:root {
+  color-scheme: light;
+  --bg: #f5f5f2;
+  --surface: #ffffff;
+  --surface-2: #f9f9f7;
+  --surface-3: #f0f0ec;
+  --border: #e5e4de;
+  --border-strong: #d2d1ca;
+  --text: #17171a;
+  --text-2: #55555d;
+  --text-3: #85858d;
+  --accent: #2a66c8;
+  --accent-bg: #eaf1fc;
+  --focus: #2a78d6;
+  --grid: #ecebe6;
+  --shadow: 0 1px 2px rgb(20 20 30 / 0.04), 0 1px 1px rgb(20 20 30 / 0.03);
+  --shadow-lg: 0 24px 60px rgb(20 20 30 / 0.18);
+
+  /* Statuts de l'interface (texte lisible sur leur fond) */
+  --good: #0f7a45;
+  --good-bg: #e9f6ee;
+  --good-border: #bfe3cd;
+  --good-solid: #17995a;
+  --warn: #8a5a00;
+  --warn-bg: #fff5d9;
+  --warn-border: #efd78a;
+  --warn-solid: #d99a00;
+  --bad: #b42323;
+  --bad-bg: #fdeceb;
+  --bad-border: #f2bbb8;
+  --bad-solid: #d83a3a;
+  --info: #23508f;
+  --info-bg: #ebf2fb;
+  --info-border: #c3d7f2;
+
+  /* Familles de statut HTTP (graphique, barres). Palette validée : séparation
+     daltonisme et contraste, dans l'ordre d'empilement 2xx · 3xx · abandons · 4xx · 5xx. */
+  --c-2xx: #1baf7a;
+  --c-3xx: #2a78d6;
+  --c-abandon: #8f8e86;
+  --c-4xx: #eda100;
+  --c-5xx: #e34948;
+
+  --radius: 12px;
+  --radius-sm: 8px;
+  --font: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --mono: ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    color-scheme: dark;
+    --bg: #0e0e10;
+    --surface: #17171a;
+    --surface-2: #1c1c20;
+    --surface-3: #232328;
+    --border: #2a2a30;
+    --border-strong: #3a3a42;
+    --text: #f1f1ef;
+    --text-2: #b3b3ba;
+    --text-3: #7f7f88;
+    --accent: #7fb0f5;
+    --accent-bg: #172338;
+    --focus: #6aa5f2;
+    --grid: #25252a;
+    --shadow: 0 1px 2px rgb(0 0 0 / 0.3);
+    --shadow-lg: 0 24px 60px rgb(0 0 0 / 0.6);
+    --good: #5fd39a;
+    --good-bg: #0f241a;
+    --good-border: #1d4a33;
+    --good-solid: #2fb574;
+    --warn: #e9bd55;
+    --warn-bg: #2a2110;
+    --warn-border: #57441a;
+    --warn-solid: #d9a21a;
+    --bad: #ff8a85;
+    --bad-bg: #2c1415;
+    --bad-border: #6a2a2b;
+    --bad-solid: #e5534f;
+    --info: #9cc2f7;
+    --info-bg: #141f31;
+    --info-border: #25406a;
+    --c-2xx: #199e70;
+    --c-3xx: #3987e5;
+    --c-abandon: #757470;
+    --c-4xx: #c98500;
+    --c-5xx: #e0456b;
+  }
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --bg: #0e0e10;
+  --surface: #17171a;
+  --surface-2: #1c1c20;
+  --surface-3: #232328;
+  --border: #2a2a30;
+  --border-strong: #3a3a42;
+  --text: #f1f1ef;
+  --text-2: #b3b3ba;
+  --text-3: #7f7f88;
+  --accent: #7fb0f5;
+  --accent-bg: #172338;
+  --focus: #6aa5f2;
+  --grid: #25252a;
+  --shadow: 0 1px 2px rgb(0 0 0 / 0.3);
+  --shadow-lg: 0 24px 60px rgb(0 0 0 / 0.6);
+  --good: #5fd39a;
+  --good-bg: #0f241a;
+  --good-border: #1d4a33;
+  --good-solid: #2fb574;
+  --warn: #e9bd55;
+  --warn-bg: #2a2110;
+  --warn-border: #57441a;
+  --warn-solid: #d9a21a;
+  --bad: #ff8a85;
+  --bad-bg: #2c1415;
+  --bad-border: #6a2a2b;
+  --bad-solid: #e5534f;
+  --info: #9cc2f7;
+  --info-bg: #141f31;
+  --info-border: #25406a;
+  --c-2xx: #199e70;
+  --c-3xx: #3987e5;
+  --c-abandon: #757470;
+  --c-4xx: #c98500;
+  --c-5xx: #e0456b;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 14px;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+h1,
+h2,
+h3,
+p {
+  margin: 0;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+.mono {
+  font-family: var(--mono);
+  font-size: 0.93em;
+  letter-spacing: -0.01em;
+}
+
+.muted {
+  color: var(--text-3);
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ── Carte ─────────────────────────────────────────────────────────────────── */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  min-width: 0;
+}
+
+.card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  flex-wrap: wrap;
+  padding: 14px 16px 10px;
+}
+
+.card-title {
+  font-size: 14px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+.card-sub {
+  font-size: 12.5px;
+  color: var(--text-3);
+}
+
+/* ── Tableaux ──────────────────────────────────────────────────────────────── */
+.table-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  border-top: 1px solid var(--border);
+}
+
+table.tbl {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.tbl th {
+  position: sticky;
+  top: 0;
+  text-align: left;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-3);
+  padding: 8px 12px;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.tbl td {
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+
+.tbl tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.tbl th.num,
+.tbl td.num {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.tbl td.num.zero {
+  color: var(--text-3);
+}
+
+.tbl th:first-child,
+.tbl td:first-child {
+  padding-left: 16px;
+}
+
+.tbl th:last-child,
+.tbl td:last-child {
+  padding-right: 16px;
+}
+
+.swatch {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  margin-right: 5px;
+  vertical-align: 0;
+}
+
+.empty {
+  padding: 28px 16px;
+  text-align: center;
+  color: var(--text-3);
+  font-size: 13px;
+}
+
+.more {
+  display: block;
+  width: 100%;
+  padding: 10px 16px;
+  background: none;
+  border: 0;
+  border-top: 1px solid var(--border);
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 550;
+  cursor: pointer;
+  border-radius: 0 0 var(--radius) var(--radius);
+}
+
+.more:hover {
+  background: var(--surface-2);
+}
+
+/* ── Contrôle segmenté ─────────────────────────────────────────────────────── */
+.segmented {
+  display: inline-flex;
+  padding: 3px;
+  gap: 2px;
+  background: var(--surface-3);
+  border-radius: 9px;
+}
+
+.segmented button {
+  border: 0;
+  background: none;
+  padding: 5px 11px;
+  border-radius: 7px;
+  font-size: 13px;
+  font-weight: 550;
+  color: var(--text-2);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color 0.15s, color 0.15s, box-shadow 0.15s;
+}
+
+.segmented button:hover {
+  color: var(--text);
+}
+
+.segmented button[aria-pressed='true'] {
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.12), 0 0 0 1px var(--border);
+}
+
+/* ── Squelettes de chargement ──────────────────────────────────────────────── */
+.skeleton {
+  display: block;
+  border-radius: 6px;
+  background: linear-gradient(90deg, var(--surface-3) 25%, var(--surface-2) 50%, var(--surface-3) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s ease-in-out infinite;
+}
+
+@keyframes shimmer {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+/* ── uPlot ─────────────────────────────────────────────────────────────────── */
+.uplot {
+  font-family: var(--font);
+}
+
+.u-cursor-x {
+  border-right: 1px solid var(--border-strong) !important;
+}
