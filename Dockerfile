@@ -7,7 +7,7 @@
 # them): mount them in /geo at runtime (see README).
 
 # ── Front end ─────────────────────────────────────────────────────────────────
-FROM --platform=$BUILDPLATFORM node:26.13.0-alpine AS web
+FROM --platform=$BUILDPLATFORM node:26.13.1-alpine AS web
 WORKDIR /web
 COPY web/package.json web/package-lock.json web/.npmrc ./
 RUN npm ci
