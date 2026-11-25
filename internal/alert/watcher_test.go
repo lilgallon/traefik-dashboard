@@ -135,3 +135,32 @@ func TestWatcherOnlyUnknownSuccess(t *testing.T) {
 		t.Fatalf("alertes inattendues : %q", got)
 	}
 }
+
+func TestWatcherAsyncDeliveryCooldown(t *testing.T) {
+	next := &fakeNotifier{err: errors.New("delivery failed")}
+	a := &Async{next: next, queue: make(chan delivery, 4), logf: t.Logf}
+	path := filepath.Join(t.TempDir(), "alerts.json")
+	w := NewWatcher(a, path, pageURL, i18n.EN)
+	e := live(now, "192.0.2.1", "web", "/", 200)
+	w.Observe(e, mobile)
+	w.Observe(e, mobile)
+	if len(a.queue) != 1 {
+		t.Fatal("duplicate pending notification")
+	}
+	close(a.queue)
+	a.run()
+	if len(next.messages()) != 3 {
+		t.Fatal("expected three failed attempts")
+	}
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Fatal("failed delivery persisted", err)
+	}
+	next.err = nil
+	a.queue = make(chan delivery, 4)
+	w.Observe(e, mobile)
+	close(a.queue)
+	a.run()
+	if len(next.messages()) != 4 || loadCooldowns(path).ready("success:"+e.IP.String(), now, successEvery) {
+		t.Fatal("successful retry did not persist cooldown")
+	}
+}

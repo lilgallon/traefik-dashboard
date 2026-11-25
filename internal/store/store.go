@@ -158,12 +158,13 @@ type routerStat struct {
 }
 
 type minute struct {
-	n       [nClasses]uint32
-	in, out uint64
-	peak    uint32 // plus forte seconde de la minute
-	red     uint32 // succès d'inconnues hors URL anonymes
-	cells   []cell
-	routers map[handle]*routerStat
+	sensitiveEvicted bool
+	n                [nClasses]uint32
+	in, out          uint64
+	peak             uint32 // plus forte seconde de la minute
+	red              uint32 // succès d'inconnues hors URL anonymes
+	cells            []cell
+	routers          map[handle]*routerStat
 
 	// Présents seulement tant que la minute reçoit des lignes (voir seal).
 	index map[cellKey]int32
@@ -523,6 +524,9 @@ func (s *Store) addSensitive(e logline.Entry, ts int64) {
 		}
 	}
 	if len(s.sensitive) >= maxSensitive {
+		if m := s.minutes[s.sensitive[0].t/60]; m != nil {
+			m.sensitiveEvicted = true
+		}
 		s.sensitive = s.sensitive[1:]
 	}
 	s.sensitive = append(s.sensitive, sensitiveHit{t: ts, ip: ip, host: e.Host, path: path, status: e.Status, count: 1})

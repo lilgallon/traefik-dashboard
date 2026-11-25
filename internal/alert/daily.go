@@ -24,7 +24,7 @@ func DailyText(s store.Summary, publicURL string, l i18n.Lang) string {
 	var b strings.Builder
 	b.WriteString(i18n.T(l, "daily.title") + "\n\n")
 
-	incomplete := s.Loading || s.LastLine.IsZero() || s.GeneratedAt.Sub(s.LastLine) >= 15*time.Minute
+	incomplete := s.Loading || s.LastLine.IsZero() || s.GeneratedAt.Sub(s.LastLine) >= 24*time.Hour
 	if incomplete {
 		b.WriteString(i18n.T(l, "daily.incomplete") + "\n")
 	}
@@ -101,6 +101,9 @@ func DailyText(s store.Summary, publicURL string, l i18n.Lang) string {
 		b.WriteString(i18n.T(l, "daily.ip_line", esc(r.IP), who, i18n.Thousands(l, total(r.ByClass)), esc(verdict), ban) + "\n")
 	}
 
+	if s.SensitiveIncomplete {
+		b.WriteString("\n" + i18n.T(l, "warn.sensitive_partial") + "\n")
+	}
 	if len(s.Sensitive) > 0 {
 		b.WriteString("\n" + i18n.T(l, "daily.sensitive") + "\n")
 		for i, h := range s.Sensitive {

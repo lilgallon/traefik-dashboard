@@ -54,19 +54,20 @@ func (c ClassCounts) total() (t int64) {
 }
 
 type Summary struct {
-	Window      string       `json:"window"` // "" pour un intervalle choisi
-	Range       *Range       `json:"range,omitempty"`
-	GeneratedAt time.Time    `json:"generatedAt"`
-	LastLine    time.Time    `json:"lastLine"`
-	Verdict     Verdict      `json:"verdict"`
-	KPIs        KPIs         `json:"kpis"`
-	Series      Series       `json:"series"`
-	IPs         []IPRow      `json:"ips"`
-	URLs        []URLRow     `json:"urls"`
-	Services    []ServiceRow `json:"services"`
-	Sensitive   []Sensitive  `json:"sensitive"`
-	Counts      Counts       `json:"counts"`
-	Warnings    []string     `json:"warnings"`
+	SensitiveIncomplete bool         `json:"sensitiveIncomplete,omitempty"`
+	Window              string       `json:"window"` // "" pour un intervalle choisi
+	Range               *Range       `json:"range,omitempty"`
+	GeneratedAt         time.Time    `json:"generatedAt"`
+	LastLine            time.Time    `json:"lastLine"`
+	Verdict             Verdict      `json:"verdict"`
+	KPIs                KPIs         `json:"kpis"`
+	Series              Series       `json:"series"`
+	IPs                 []IPRow      `json:"ips"`
+	URLs                []URLRow     `json:"urls"`
+	Services            []ServiceRow `json:"services"`
+	Sensitive           []Sensitive  `json:"sensitive"`
+	Counts              Counts       `json:"counts"`
+	Warnings            []string     `json:"warnings"`
 	// Capped : le plafond mémoire a été atteint sur la période (l'API en fait un
 	// avertissement traduit).
 	Capped bool `json:"-"`
@@ -386,7 +387,7 @@ func windowPlan(w Window, now time.Time) plan {
 	case W1h:
 		p.seconds = true
 		p.start = from * 60
-		p.points = int(now.Unix() - p.start + 1)
+		p.points = int(now.Add(-LiveLag).Unix() - p.start + 1)
 	case W7d:
 		p.points = 168
 		p.start = from * 60
@@ -545,6 +546,9 @@ func (s *Store) summarize(p plan, now time.Time) Summary {
 	urls := make(map[urlKey]*urlAgg, 256)
 	routers := make(map[handle]*routerStat, 16)
 	s.eachMinute(from, to, func(_ int64, m *minute) {
+		if m.sensitiveEvicted {
+			sum.SensitiveIncomplete = true
+		}
 		for i := range m.cells {
 			c := &m.cells[i]
 			a := ips[c.ip]

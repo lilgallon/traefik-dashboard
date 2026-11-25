@@ -168,7 +168,7 @@ func TestSeries(t *testing.T) {
 	}
 	sum := s.Summary(W1h, t0)
 	se := sum.Series
-	if se.StepSeconds != 1 || len(se.T) != 3541 || len(se.ByClass[logline.Class2xx]) != len(se.T) {
+	if se.StepSeconds != 1 || len(se.T) != 3541-int(LiveLag/time.Second) || len(se.ByClass[logline.Class2xx]) != len(se.T) {
 		t.Fatalf("1h : pas %d, %d points", se.StepSeconds, len(se.T))
 	}
 	var total float64
@@ -671,5 +671,15 @@ func TestSensitivePeriodAndRedaction(t *testing.T) {
 		if len(rows) != 1 || rows[0].Count != tc.count || rows[0].Path != "/config.json?token=…" {
 			t.Fatalf("%s: %+v", tc.w, rows)
 		}
+	}
+}
+
+func TestSensitiveEvictionByPeriod(t *testing.T) {
+	s := New()
+	for i := maxSensitive; i >= 0; i-- {
+		s.Add(req(t0.Add(-time.Duration(i)*time.Minute), "192.0.2.1", "web", "/.env", 200), Identity{})
+	}
+	if !s.Summary(W24h, t0).SensitiveIncomplete || s.Summary(W1h, t0).SensitiveIncomplete {
+		t.Fatal("expected eviction warning only in the longer window")
 	}
 }

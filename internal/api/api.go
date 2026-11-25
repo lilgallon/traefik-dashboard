@@ -7,7 +7,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/lilgallon/traefik-dashboard/internal/logline"
 	"io"
 	"io/fs"
 	"net"
@@ -22,6 +21,7 @@ import (
 
 	"github.com/lilgallon/traefik-dashboard/internal/crowdsec"
 	"github.com/lilgallon/traefik-dashboard/internal/i18n"
+	"github.com/lilgallon/traefik-dashboard/internal/logline"
 	"github.com/lilgallon/traefik-dashboard/internal/store"
 )
 
@@ -212,6 +212,9 @@ func (s *Server) Summary(w store.Window) store.Summary {
 }
 
 func (s *Server) decorate(sum store.Summary, now time.Time, l i18n.Lang) store.Summary {
+	if sum.SensitiveIncomplete {
+		sum.Warnings = append(sum.Warnings, i18n.T(l, "warn.sensitive_partial"))
+	}
 	if sum.Capped {
 		sum.Warnings = append(sum.Warnings, i18n.T(l, "warn.capped"))
 	}
