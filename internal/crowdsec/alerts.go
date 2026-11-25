@@ -123,6 +123,9 @@ func (r *rawAlert) alert(machineID string) Alert {
 		a.More = len(paths) - 3
 		paths = paths[:3]
 	}
+	for i, path := range paths {
+		paths[i] = store.MaskSecrets(path)
+	}
 	a.Paths = paths
 	return a
 }

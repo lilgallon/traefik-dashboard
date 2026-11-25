@@ -65,8 +65,8 @@ func TestMaskSecrets(t *testing.T) {
 		"/auth/authorize?client_id=x&code=y": "/auth/authorize?client_id=x&code=…",
 		"/token/abc":                         "/token/abc",
 	} {
-		if got := maskSecrets(in); got != want {
-			t.Errorf("maskSecrets(%q) = %q, attendu %q", in, got, want)
+		if got := MaskSecrets(in); got != want {
+			t.Errorf("MaskSecrets(%q) = %q, attendu %q", in, got, want)
 		}
 	}
 }

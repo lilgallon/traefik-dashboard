@@ -13,11 +13,11 @@ import (
 
 func sampleSummary() store.Summary {
 	return store.Summary{
-		Window: "24h",
+		Window: "24h", LastLine: now, GeneratedAt: now,
 		KPIs: store.KPIs{AvgRPS: 1.26, PeakRPS: 9, BytesIn: 1536, BytesOut: 1_200_000_000, ActiveBans: 3,
 			ByClass: store.ClassCounts{logline.Class2xx: 110742, logline.Class3xx: 12, logline.Class4xx: 950,
 				logline.Class5xx: 4, logline.ClassAbandon: 7, logline.Class1xx: 2}},
-		Verdict: store.Verdict{Red: true, Offenders: []store.Offender{
+		Verdict: store.Verdict{Red: true, TotalIPs: 1, Offenders: []store.Offender{
 			{IP: "198.51.100.1", Country: "FR", Org: "Orange", Count: 3, URLs: []string{"home.example.com/api/states/<script>"}}}},
 		IPs: []store.IPRow{
 			{IP: "198.51.100.238", Name: "Partenaire GCP 2", Verdict: store.VerdictKnown, ByClass: store.ClassCounts{logline.Class2xx: 100000}},
@@ -125,5 +125,15 @@ func TestRunDailyStopsOnCancel(t *testing.T) {
 	case <-done:
 	case <-time.After(time.Second):
 		t.Fatal("RunDaily ne s'arrête pas")
+	}
+}
+
+func TestDailyIncomplete(t *testing.T) {
+	s := sampleSummary()
+	s.Verdict = store.Verdict{}
+	s.LastLine = time.Time{}
+	msg := DailyText(s, pageURL, i18n.EN)
+	if !strings.Contains(msg, "Incomplete log coverage") || strings.Contains(msg, "🟢") {
+		t.Fatal(msg)
 	}
 }

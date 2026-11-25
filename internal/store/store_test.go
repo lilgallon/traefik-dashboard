@@ -168,7 +168,7 @@ func TestSeries(t *testing.T) {
 	}
 	sum := s.Summary(W1h, t0)
 	se := sum.Series
-	if se.StepSeconds != 1 || len(se.T) != 3600 || len(se.ByClass[logline.Class2xx]) != 3600 {
+	if se.StepSeconds != 1 || len(se.T) != 3541-int(LiveLag/time.Second) || len(se.ByClass[logline.Class2xx]) != len(se.T) {
 		t.Fatalf("1h : pas %d, %d points", se.StepSeconds, len(se.T))
 	}
 	var total float64
@@ -655,5 +655,31 @@ func TestSummaryRange(t *testing.T) {
 	d, ok, _ = s.IPDetailRange(netip.MustParseAddr("198.51.100.2"), Range{From: t0.Add(-38 * time.Minute).Unix(), To: t0.Unix()}, t0)
 	if !ok || len(d.RawPaths) != 1 || d.RawPaths[0].Path != "/y" {
 		t.Errorf("détail limité à l'intervalle : %+v", d.RawPaths)
+	}
+}
+
+func TestSensitivePeriodAndRedaction(t *testing.T) {
+	s := New()
+	for _, age := range []time.Duration{25 * time.Hour, time.Minute} {
+		s.Add(req(t0.Add(-age), "192.0.2.1", "web", "/config.json?token=dummy", 200), Identity{})
+	}
+	for _, tc := range []struct {
+		w     Window
+		count int64
+	}{{W1h, 1}, {W7d, 2}} {
+		rows := s.Summary(tc.w, t0).Sensitive
+		if len(rows) != 1 || rows[0].Count != tc.count || rows[0].Path != "/config.json?token=…" {
+			t.Fatalf("%s: %+v", tc.w, rows)
+		}
+	}
+}
+
+func TestSensitiveEvictionByPeriod(t *testing.T) {
+	s := New()
+	for i := maxSensitive; i >= 0; i-- {
+		s.Add(req(t0.Add(-time.Duration(i)*time.Minute), "192.0.2.1", "web", "/.env", 200), Identity{})
+	}
+	if !s.Summary(W24h, t0).SensitiveIncomplete || s.Summary(W1h, t0).SensitiveIncomplete {
+		t.Fatal("expected eviction warning only in the longer window")
 	}
 }

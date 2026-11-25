@@ -159,7 +159,7 @@ export interface Summary {
   range?: TimeRange
   generatedAt: string
   lastLine: string
-  verdict: { red: boolean; offenders: Offender[] }
+  verdict: { red: boolean; totalIPs?: number; totalSuccesses?: number; offenders: Offender[] }
   kpis: Kpis
   series: Series
   ips: IpRow[]
@@ -241,7 +241,7 @@ function readHeaders(): Record<string, string> {
 }
 
 async function getJson<T>(url: string): Promise<T> {
-  const res = await fetch(url, { headers: readHeaders(), cache: 'no-store' })
+  const res = await fetch(url, { headers: readHeaders(), cache: 'no-store', signal: AbortSignal.timeout(30_000) })
   if (!res.ok) throw new Error(t('api.httpError', { status: res.status }))
   return (await res.json()) as T
 }
