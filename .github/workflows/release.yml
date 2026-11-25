@@ -1,7 +1,8 @@
 name: Image
 
 # main  → ghcr.io/<owner>/traefik-dashboard:edge (and sha-<commit>)
-# v1.2.3 → :1.2.3, :1.2, :1 and :latest
+# v1.2.3 → :1.2.3, :1.2, :1 and :latest, plus a GitHub release whose notes
+#          are the matching section of CHANGELOG.md
 on:
   push:
     branches: [main]
@@ -10,7 +11,6 @@ on:
 
 permissions:
   contents: read
-  packages: write
 
 concurrency:
   group: image-${{ github.ref }}
@@ -19,6 +19,9 @@ concurrency:
 jobs:
   image:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
     steps:
       - uses: actions/checkout@v7
       # The final stage runs `apk add` for each target platform.
@@ -53,3 +56,36 @@ jobs:
           build-args: VERSION=${{ steps.meta.outputs.version }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+      - name: Release notes from CHANGELOG.md
+        env:
+          VERSION: ${{ github.ref_name }}
+        run: |
+          v="${VERSION#v}"
+          awk -v v="$v" '
+            /^\[[^]]+\]: / { exit }
+            /^## \[/ { if (on) exit; if (index($0, "## [" v "]") == 1) { on = 1; next } }
+            on
+          ' CHANGELOG.md > notes.md
+          if ! grep -q '[^[:space:]]' notes.md; then
+            echo "::error::No section for $v in CHANGELOG.md"
+            exit 1
+          fi
+          # shellcheck disable=SC2016 # literal backticks (Markdown)
+          printf '\n**Image**: `ghcr.io/%s:%s`\n' "$GITHUB_REPOSITORY" "$v" >> notes.md
+      - name: GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ github.ref_name }}
+        run: |
+          flags=()
+          [[ "$VERSION" == *-* ]] && flags+=(--prerelease)
+          gh release create "$VERSION" --verify-tag --title "$VERSION" --notes-file notes.md "${flags[@]}"
