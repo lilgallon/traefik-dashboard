@@ -89,22 +89,30 @@ const asyncQueue = 100
 
 // Async envoie en arrière-plan, avec quelques nouveaux essais : la lecture des
 // logs ne doit jamais attendre Telegram.
+type delivery struct {
+	text string
+	done func(error)
+}
+
 type Async struct {
 	next       Notifier
-	queue      chan string
+	queue      chan delivery
 	logf       func(format string, args ...any)
 	retryDelay time.Duration
 }
 
 func NewAsync(next Notifier, logf func(format string, args ...any)) *Async {
-	a := &Async{next: next, queue: make(chan string, asyncQueue), logf: logf, retryDelay: 5 * time.Second}
+	a := &Async{next: next, queue: make(chan delivery, asyncQueue), logf: logf, retryDelay: 5 * time.Second}
 	go a.run()
 	return a
 }
 
 func (a *Async) Send(_ context.Context, text string) error {
+	return a.enqueue(text, nil)
+}
+func (a *Async) enqueue(text string, done func(error)) error {
 	select {
-	case a.queue <- text:
+	case a.queue <- delivery{text, done}:
 		return nil
 	default:
 		return errors.New("Telegram send queue full, alert dropped")
@@ -112,18 +120,21 @@ func (a *Async) Send(_ context.Context, text string) error {
 }
 
 func (a *Async) run() {
-	for text := range a.queue {
+	for job := range a.queue {
 		var err error
 		for attempt := 0; attempt < 3; attempt++ {
 			if attempt > 0 {
 				time.Sleep(a.retryDelay * time.Duration(attempt))
 			}
 			ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-			err = a.next.Send(ctx, text)
+			err = a.next.Send(ctx, job.text)
 			cancel()
 			if err == nil {
 				break
 			}
+		}
+		if job.done != nil {
+			job.done(err)
 		}
 		if err != nil {
 			a.logf("Telegram alert not sent: %v", err)

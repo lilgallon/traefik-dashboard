@@ -75,8 +75,10 @@ type Summary struct {
 }
 
 type Verdict struct {
-	Red       bool       `json:"red"`
-	Offenders []Offender `json:"offenders"`
+	TotalIPs       int        `json:"totalIPs"`
+	TotalSuccesses int64      `json:"totalSuccesses"`
+	Red            bool       `json:"red"`
+	Offenders      []Offender `json:"offenders"`
 }
 
 // Offender est une IP inconnue qui a obtenu un succès hors URL anonymes.
@@ -383,8 +385,8 @@ func windowPlan(w Window, now time.Time) plan {
 	switch w {
 	case W1h:
 		p.seconds = true
-		p.points = secRing
-		p.start = now.Add(-LiveLag).Unix() - secRing + 1
+		p.start = from * 60
+		p.points = int(now.Unix() - p.start + 1)
 	case W7d:
 		p.points = 168
 		p.start = from * 60
@@ -610,6 +612,10 @@ func (s *Store) summarize(p plan, now time.Time) Summary {
 	slices.SortFunc(red, func(a, b *ipAgg) int {
 		return cmp.Or(cmp.Compare(b.uRed, a.uRed), byIP(a, b))
 	})
+	sum.Verdict.TotalIPs = len(red)
+	for _, a := range red {
+		sum.Verdict.TotalSuccesses += a.uRed
+	}
 	for _, a := range red[:min(len(red), maxOffenders)] {
 		r := s.row(a)
 		sum.Verdict.Offenders = append(sum.Verdict.Offenders, Offender{
@@ -635,16 +641,32 @@ func (s *Store) summarize(p plan, now time.Time) Summary {
 	})
 
 	// ── Chemins sensibles servis ────────────────────────────────────────────────
-	for i := len(s.sensitive) - 1; i >= 0 && len(sum.Sensitive) < 20; i-- {
-		h := s.sensitive[i]
-		if h.t/60 >= from && h.t/60 <= to {
-			sum.Sensitive = append(sum.Sensitive, Sensitive{
-				IP: h.ip, Host: h.host, Path: h.path, Status: h.status, Count: h.count,
-				Last: time.Unix(h.t, 0).UTC(),
-			})
-		}
+	type sensitiveKey struct {
+		ip, host, path string
+		status         int
 	}
-
+	hits := map[sensitiveKey]Sensitive{}
+	for _, h := range s.sensitive {
+		if h.t/60 < from || h.t/60 > to {
+			continue
+		}
+		k := sensitiveKey{h.ip, h.host, h.path, h.status}
+		v := hits[k]
+		at := time.Unix(h.t, 0).UTC()
+		if at.After(v.Last) {
+			v.Last = at
+		}
+		v.IP, v.Host, v.Path, v.Status = h.ip, h.host, h.path, h.status
+		v.Count += h.count
+		hits[k] = v
+	}
+	for _, v := range hits {
+		sum.Sensitive = append(sum.Sensitive, v)
+	}
+	slices.SortFunc(sum.Sensitive, func(a, b Sensitive) int {
+		return cmp.Or(b.Last.Compare(a.Last), cmp.Compare(a.IP, b.IP), cmp.Compare(a.Host, b.Host), cmp.Compare(a.Path, b.Path), cmp.Compare(a.Status, b.Status))
+	})
+	sum.Sensitive = sum.Sensitive[:min(20, len(sum.Sensitive))]
 	if s.capped != 0 && s.capped >= from {
 		sum.Capped = true
 	}

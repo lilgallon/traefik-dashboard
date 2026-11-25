@@ -18,7 +18,7 @@
   const tone = $derived(
     red ? 'bad' : mode === 'live' ? 'good' : mode === 'stale' || mode === 'offline' ? 'warn' : 'idle',
   )
-  const successes = $derived(offenders.reduce((n, o) => n + o.count, 0))
+  const successes = $derived(summary?.verdict.totalSuccesses ?? offenders.reduce((n, o) => n + o.count, 0))
 </script>
 
 <section class="banner {tone}" aria-live="polite" aria-label={t('banner.aria')}>
@@ -38,7 +38,7 @@
     </div>
     <div class="text">
       {#if red}
-        <h2>{tn('banner.red.title', offenders.length)}</h2>
+        <h2>{tn('banner.red.title', summary?.verdict.totalIPs ?? offenders.length)}</h2>
         <p>
           {tn('banner.red.text', successes, { period: periodPhrase(period) })}
           {#if mode === 'stale'}{t('banner.red.stale')}{/if}

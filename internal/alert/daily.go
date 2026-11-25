@@ -24,8 +24,12 @@ func DailyText(s store.Summary, publicURL string, l i18n.Lang) string {
 	var b strings.Builder
 	b.WriteString(i18n.T(l, "daily.title") + "\n\n")
 
+	incomplete := s.Loading || s.LastLine.IsZero() || s.GeneratedAt.Sub(s.LastLine) >= 15*time.Minute
+	if incomplete {
+		b.WriteString(i18n.T(l, "daily.incomplete") + "\n")
+	}
 	if s.Verdict.Red {
-		n := len(s.Verdict.Offenders)
+		n := s.Verdict.TotalIPs
 		b.WriteString(i18n.N(l, "daily.red", int64(n), n) + "\n")
 		for i, o := range s.Verdict.Offenders {
 			if i == 5 {
@@ -38,7 +42,7 @@ func DailyText(s store.Summary, publicURL string, l i18n.Lang) string {
 			}
 			b.WriteString(i18n.N(l, "daily.offender", o.Count, esc(o.IP), esc(strings.TrimSpace(o.Country+" "+o.Org)), o.Count, url) + "\n")
 		}
-	} else {
+	} else if !incomplete {
 		b.WriteString(i18n.T(l, "daily.green") + "\n")
 	}
 

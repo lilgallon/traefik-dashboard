@@ -70,6 +70,7 @@ var catalog = map[string]entry{
 	"daily.more":           {"  … and %d more", "  … et %d autre(s)"},
 	"daily.offender.one":   {"  • <code>%s</code> %s: %d success%s", "  • <code>%s</code> %s : %d succès%s"},
 	"daily.offender.other": {"  • <code>%s</code> %s: %d successes%s", "  • <code>%s</code> %s : %d succès%s"},
+	"daily.incomplete":     {"Incomplete log coverage: the verdict may be incomplete.", "Couverture des journaux incomplète : le verdict peut être partiel."},
 	"daily.green":          {"🟢 No unknown IP got a success", "🟢 Aucune IP inconnue n'a obtenu de succès"},
 	"daily.requests":       {"Requests: %s (avg %s req/s, peak %d)", "Requêtes : %s (moy. %s req/s, pic %d)"},
 	"daily.aborted":        {"aborted", "abandons"},

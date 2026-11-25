@@ -86,9 +86,9 @@ func IsSensitive(path string) bool {
 
 var secretParamRE = regexp.MustCompile(`(?i)([?&][^=&]*(token|key|secret|password|passwd|pwd|auth|code|sig)[^=&]*=)[^&]*`)
 
-// maskSecrets masque la valeur des paramètres de query qui portent un secret
+// MaskSecrets masque la valeur des paramètres de query qui portent un secret
 // (jeton Gotify dans /stream?token=…) : la page n'a pas d'authentification.
-func maskSecrets(path string) string {
+func MaskSecrets(path string) string {
 	if !strings.Contains(path, "?") {
 		return path
 	}

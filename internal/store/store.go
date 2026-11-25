@@ -359,7 +359,7 @@ func (s *Store) Add(e logline.Entry, id Identity) {
 			Ms:     float64(e.Duration) / float64(time.Millisecond),
 			Socket: e.Status == 0 && success,
 		},
-		ip: e.IP, router: e.Router, norm: clip(normPath), raw: clip(maskSecrets(rawPath)), success: success,
+		ip: e.IP, router: e.Router, norm: clip(normPath), raw: clip(MaskSecrets(rawPath)), success: success,
 	}
 	h.identify(id)
 
@@ -500,7 +500,7 @@ func (s *Store) addExtra(e logline.Entry, id Identity, mk int64) {
 	if id.Name != "" {
 		return
 	}
-	path := clip(maskSecrets(e.Path))
+	path := clip(MaskSecrets(e.Path))
 	if n := len(x.raw); n > 0 && x.raw[n-1].Path == path && x.raw[n-1].Status == e.Status && x.raw[n-1].Host == e.Host {
 		x.raw[n-1].Time = e.Time
 		return
@@ -513,10 +513,10 @@ func (s *Store) addExtra(e logline.Entry, id Identity, mk int64) {
 }
 
 func (s *Store) addSensitive(e logline.Entry, ts int64) {
-	ip, path := e.IP.String(), clip(e.Path)
+	ip, path := e.IP.String(), clip(MaskSecrets(e.Path))
 	for i := range s.sensitive {
 		h := &s.sensitive[i]
-		if h.ip == ip && h.host == e.Host && h.path == path {
+		if h.t/60 == ts/60 && h.status == e.Status && h.ip == ip && h.host == e.Host && h.path == path {
 			h.count++
 			h.t = max(h.t, ts)
 			return

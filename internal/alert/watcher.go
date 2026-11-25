@@ -24,18 +24,37 @@ type Watcher struct {
 	publicURL string
 	lang      i18n.Lang
 
-	mu sync.Mutex
-	cd *cooldowns
+	mu      sync.Mutex
+	pending map[string]bool
+	cd      *cooldowns
 }
 
 func NewWatcher(n Notifier, statePath, publicURL string, lang i18n.Lang) *Watcher {
-	return &Watcher{n: n, publicURL: strings.TrimRight(publicURL, "/"), lang: lang, cd: loadCooldowns(statePath)}
+	return &Watcher{n: n, publicURL: strings.TrimRight(publicURL, "/"), lang: lang, pending: make(map[string]bool), cd: loadCooldowns(statePath)}
 }
 
 // alert envoie si le délai anti-répétition le permet. Un envoi raté n'est pas
 // mémorisé : la prochaine occurrence réessaiera.
 func (w *Watcher) alert(key string, at time.Time, every time.Duration, text func() string) {
-	if !w.cd.ready(key, at, every) {
+	if w.pending[key] || !w.cd.ready(key, at, every) {
+		return
+	}
+	if a, ok := w.n.(*Async); ok {
+		w.pending[key] = true
+		err := a.enqueue(text(), func(err error) {
+			w.mu.Lock()
+			defer w.mu.Unlock()
+			delete(w.pending, key)
+			if err == nil {
+				if err := w.cd.mark(key, at); err != nil {
+					log.Printf("alert state not written: %v", err)
+				}
+			}
+		})
+		if err != nil {
+			delete(w.pending, key)
+			log.Printf("alert %q not queued: %v", key, err)
+		}
 		return
 	}
 	if err := w.n.Send(context.Background(), text()); err != nil {
@@ -74,7 +93,7 @@ func whois(l i18n.Lang, id store.Identity) string {
 }
 
 func requestLine(e logline.Entry) string {
-	path := e.Path
+	path := store.MaskSecrets(e.Path)
 	if len(path) > 200 {
 		path = path[:200] + "…"
 	}

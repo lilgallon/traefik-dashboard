@@ -67,7 +67,11 @@
 
   let seq = 0
   let lastForced = 0
-  async function refresh() {
+  let pendingKey: string | null = null
+  async function refresh(coalesce = false) {
+    const key = periodKey(period) + lang()
+    if (coalesce && pendingKey === key) return
+    pendingKey = key
     const id = ++seq
     const p = period
     try {
@@ -78,7 +82,7 @@
       error = null
     } catch (e) {
       if (id === seq) error = e instanceof Error ? e.message : String(e)
-    }
+    } finally { if (id === seq) pendingKey = null }
   }
 
   function setWindow(w: Window) {
@@ -115,11 +119,11 @@
     void refresh()
     // Un intervalle figé ne change pas : rafraîchir ne sert qu'au direct.
     const poll = setInterval(() => {
-      if (!document.hidden && !range) void refresh()
+      if (!document.hidden && !range) void refresh(true)
     }, REFRESH_MS)
     const clock = setInterval(() => (now = new Date()), 1000)
     const onvisible = () => {
-      if (!document.hidden && !range) void refresh()
+      if (!document.hidden && !range) void refresh(true)
     }
     const onkey = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && range && !selected) backToLive()
@@ -150,7 +154,7 @@
     if (!t || !summary || range || summary.window !== win) return
     if ((t.red[win] !== summary.verdict.red || t.loading !== summary.loading) && Date.now() - lastForced > 1500) {
       lastForced = Date.now()
-      void refresh()
+      void refresh(true)
     }
   })
 

@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/lilgallon/traefik-dashboard/internal/logline"
 	"io"
 	"io/fs"
 	"net"
@@ -302,8 +303,10 @@ func (s *Server) handleIP(w http.ResponseWriter, r *http.Request) {
 		d, found = s.cfg.Store.IPDetail(ip, p.win, s.cfg.Now())
 	}
 	if !found {
-		s.fail(w, r, http.StatusNotFound, "api.ip_no_requests")
-		return
+		d = store.IPDetail{IPRow: store.IPRow{IP: ip.String(), Verdict: store.VerdictOther, ByClass: store.ClassCounts{}}, URLs: []store.URLRow{}, Routers: map[string]int64{}, Rules: map[string]int64{}, UserAgents: []string{}, RawPaths: []store.RawHit{}}
+		for _, c := range logline.Classes {
+			d.ByClass[c] = 0
+		}
 	}
 	if s.cfg.Bans != nil {
 		if bans, err := s.cfg.Bans(); err == nil {
@@ -315,6 +318,10 @@ func (s *Server) handleIP(w http.ResponseWriter, r *http.Request) {
 	resp := ipResponse{IPDetail: d, Block: s.blockState(ip, s.lang(r)), Alerts: []crowdsec.Alert{}}
 	if s.cfg.IPAlerts != nil {
 		resp.Alerts = s.cfg.IPAlerts(ip)
+	}
+	if !found && d.Ban == nil && len(resp.Alerts) == 0 {
+		s.fail(w, r, http.StatusNotFound, "api.ip_no_requests")
+		return
 	}
 	writeJSON(w, r, http.StatusOK, resp)
 }

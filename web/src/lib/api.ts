@@ -159,7 +159,7 @@ export interface Summary {
   range?: TimeRange
   generatedAt: string
   lastLine: string
-  verdict: { red: boolean; offenders: Offender[] }
+  verdict: { red: boolean; totalIPs?: number; totalSuccesses?: number; offenders: Offender[] }
   kpis: Kpis
   series: Series
   ips: IpRow[]
