@@ -10,6 +10,18 @@ Live security dashboard for Traefik access logs. It answers one question: **is a
 
 Read-only by default: banning is enabled only when you provide a CrowdSec machine account.
 
+![Dashboard: an unknown IP got a successful response in the last 24 hours](docs/screenshots/overview-light.png)
+
+<details>
+<summary>More screenshots</summary>
+
+| | |
+|---|---|
+| ![Dark theme, all clear over the last hour](docs/screenshots/overview-dark.png) | ![IP detail with ban and naming actions](docs/screenshots/ip-detail.png) |
+| ![IP table: named and unknown IPs with their verdicts](docs/screenshots/ips.png) | ![CrowdSec panel: bans, scenarios and alerts](docs/screenshots/crowdsec.png) |
+
+</details>
+
 > **Status**: early release, extracted from a personal home server. The UI is in French for now; English is planned. See the [roadmap](#roadmap).
 
 ## How it works
@@ -72,6 +84,7 @@ All settings are environment variables. Only the log directory and `names.yaml` 
 | `CROWDSEC_WHITELIST` | | CrowdSec whitelist file checked against the `crowdsec` list of `names.yaml`. |
 | `TRAEFIK_DYNAMIC` | | Traefik dynamic configuration file whose `ipAllowList` middlewares are checked against the other lists of `names.yaml`. |
 | `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID` | | Telegram alerts. Without them, alerts are only logged. |
+| `TELEGRAM_API_URL` | `https://api.telegram.org` | Telegram API base URL (proxy, or the local mock). |
 | `DAILY_AT` | `08:00` | Time of the daily summary (UTC). |
 
 ### GeoLite2 databases
@@ -110,14 +123,33 @@ Banning is refused for private or reserved addresses, and for any IP covered by 
 
 ## Development
 
+### Local environment
+
+`make dev` starts a complete local stack with Docker Compose ([`dev/compose.yml`](dev/compose.yml)):
+
+- **loggen** writes a synthetic Traefik `access.log`: 7 days of history with a daily rhythm, then live traffic. It includes named IPs (home, phone, partner, uptime probe), anonymous visitors, scanners, a brute-force attempt, and an unknown IP that got a success 3 hours ago (the 24 h view is red, the 1 h view is green). A scan burst every 90 seconds gets banned by CrowdSec.
+- **crowdsec** is a real CrowdSec reading that log (Traefik and HTTP scenarios). It comes with a bouncer key, a machine account for the dashboard, and one manual ban.
+- **telegram-mock** receives the alerts and lists them at http://localhost:18081.
+- **traefik-dashboard** is built from the sources and served at http://localhost:18080.
+
+The synthetic IPs come from [MaxMind's test databases](https://github.com/maxmind/MaxMind-DB/tree/main/test-data), which the environment uses instead of GeoLite2. Countries and operators show up without involving any real client IP. Set `INTRUDER_EVERY=10m` to also get live "unknown IP" alerts.
+
 ```bash
-# Back end
-go test ./...
+make dev          # build and start (about 1 minute the first time)
+make dev-logs     # follow the logs
+make dev-down     # stop and delete everything; history is regenerated next time
+```
 
-# Front end (Svelte 5 + uPlot, embedded in the binary)
-cd web && npm ci && npm run check && npm test && npm run build
+To work on the front end with hot reload, keep `make dev` running and start Vite: `cd web && npm run dev` (http://localhost:5173, API proxied to the local instance).
 
-# Image
+### Screenshots
+
+`make screenshots` regenerates the README screenshots in `docs/screenshots/` from the local environment, with Playwright running in Docker. It first waits until CrowdSec has banned a few scanners (about 3 minutes after `make dev`).
+
+### Tests
+
+```bash
+make test         # go test ./... and front-end checks and tests
 docker build -t traefik-dashboard .
 ```
 

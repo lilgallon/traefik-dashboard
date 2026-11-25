@@ -1,0 +1,26 @@
+# Noms de l'environnement local (IP des bases de test MaxMind).
+# Syntaxe complète : examples/names.yaml.
+names:
+  - name: Home
+    ip: [81.2.69.142]
+    lists: [crowdsec, partners]
+  - name: LAN
+    ip: [10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16]
+    lists: [crowdsec]
+  - name: Partner API
+    ip: [89.160.20.112/28]
+    lists: [crowdsec, partners]
+  - name: Phone
+    asn: [1221]
+    routers: [homeassistant]
+  - name: Uptime probe
+    ip: [216.160.83.56/29]
+    routers: [uptime-kuma]
+
+anonymous:
+  - router: homeassistant
+    exact: [/, /manifest.json]
+    prefixes: [/frontend_latest/, /static/, /auth/authorize]
+  - router: uptime-kuma
+  - router: n8n-webhooks
+    prefixes: [/webhook/]

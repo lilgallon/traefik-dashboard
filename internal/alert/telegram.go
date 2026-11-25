@@ -34,6 +34,15 @@ func NewTelegram(token, chatID string) *Telegram {
 		http: &http.Client{Timeout: 10 * time.Second}}
 }
 
+// WithBaseURL remplace l'URL de l'API Telegram (proxy, ou faux serveur de
+// l'environnement local).
+func (t *Telegram) WithBaseURL(u string) *Telegram {
+	if u != "" {
+		t.baseURL = strings.TrimRight(u, "/")
+	}
+	return t
+}
+
 func (t *Telegram) Send(ctx context.Context, text string) error {
 	if r := []rune(text); len(r) > telegramMaxRunes {
 		// Coupe sur une ligne entière pour ne pas laisser une balise ouverte.

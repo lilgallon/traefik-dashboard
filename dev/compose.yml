@@ -1,0 +1,153 @@
+# Local environment: synthetic Traefik logs, a real CrowdSec reading them, a fake
+# Telegram and the dashboard built from the sources.
+#
+#   make dev          # http://localhost:18080 (dashboard), http://localhost:18081 (alerts)
+#   make dev-down     # stop and delete everything (volumes included)
+#
+# Everything is local: the only outbound traffic is the CrowdSec hub download and
+# the MaxMind test databases (GitHub).
+
+name: traefik-dashboard-dev
+
+x-tools: &tools
+  build:
+    context: ..
+    dockerfile: dev/Dockerfile.tools
+  image: traefik-dashboard-dev-tools:local
+
+services:
+  # 7 days of history on first start, then live traffic (and a scan burst every
+  # 3 minutes, which CrowdSec bans).
+  loggen:
+    <<: *tools
+    command: ["loggen", "-out", "/logs/access.log", "-intruder-every", "${INTRUDER_EVERY:-0}"]
+    volumes:
+      - logs:/logs
+    restart: unless-stopped
+
+  telegram-mock:
+    <<: *tools
+    command: ["telegram-mock"]
+    ports:
+      - "127.0.0.1:18081:8081"
+    restart: unless-stopped
+
+  # MaxMind test databases (fictitious ranges, MIT / Apache 2.0) instead of the
+  # real GeoLite2 databases: countries and operators show up for the synthetic IPs.
+  geo:
+    image: alpine:3.24.4
+    command:
+      - sh
+      - -c
+      - |
+        set -e
+        base=https://raw.githubusercontent.com/maxmind/MaxMind-DB/5c972a8a85df5557c122f79d6e172c7a5cfe93c5/test-data
+        [ -s /geo/GeoLite2-City.mmdb ] || wget -qO /geo/GeoLite2-City.mmdb $$base/GeoIP2-City-Test.mmdb
+        [ -s /geo/GeoLite2-ASN.mmdb ] || wget -qO /geo/GeoLite2-ASN.mmdb $$base/GeoLite2-ASN-Test.mmdb
+        chmod 0444 /geo/*.mmdb
+    volumes:
+      - geo:/geo
+
+  crowdsec:
+    image: crowdsecurity/crowdsec:v1.8.2
+    environment:
+      - COLLECTIONS=crowdsecurity/traefik crowdsecurity/http-cve crowdsecurity/base-http-scenarios
+      - BOUNCER_KEY_dashboard=dev-bouncer-key
+    volumes:
+      - crowdsec-config:/etc/crowdsec
+      - crowdsec-data:/var/lib/crowdsec/data
+      - ./crowdsec/acquis.yaml:/etc/crowdsec/acquis.d/traefik.yaml:ro
+      - ./crowdsec/whitelist.yaml:/etc/crowdsec/parsers/s02-enrich/dev-whitelist.yaml:ro
+      - logs:/logs:ro
+    healthcheck:
+      test: ["CMD", "cscli", "lapi", "status"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+    restart: unless-stopped
+
+  # Machine account for the dashboard (alerts, ban / unban), plus one manual ban
+  # so the CrowdSec panel is not empty at first. Shares CrowdSec's network stack
+  # to reach its local API on localhost.
+  crowdsec-init:
+    image: crowdsecurity/crowdsec:v1.8.2
+    network_mode: service:crowdsec
+    entrypoint:
+      - sh
+      - -c
+      - |
+        set -e
+        cscli machines add traefik-dashboard --password dev-machine-password -f /dev/null --force
+        cscli decisions list -i 175.16.199.23 -o raw | grep -q ban || \
+          cscli decisions add -i 175.16.199.23 -d 24h -R "manuel (tableau de bord) : scan wp-admin"
+    volumes:
+      - crowdsec-config:/etc/crowdsec
+      - crowdsec-data:/var/lib/crowdsec/data
+    depends_on:
+      crowdsec:
+        condition: service_healthy
+
+  traefik-dashboard:
+    build:
+      context: ..
+      args:
+        VERSION: dev
+    image: traefik-dashboard:dev
+    ports:
+      # Same port as the Vite proxy (web/vite.config.ts): `npm run dev` in web/
+      # serves the front end with hot reload against this instance.
+      - "127.0.0.1:18080:8080"
+    environment:
+      - PUBLIC_URL=http://localhost:18080
+      - ALLOWED_HOSTS=127.0.0.1:18080,localhost:5173,traefik-dashboard:8080
+      - CROWDSEC_LAPI_URL=http://crowdsec:8080
+      - CROWDSEC_BOUNCER_KEY=dev-bouncer-key
+      - CROWDSEC_MACHINE_PASSWORD=dev-machine-password
+      - CROWDSEC_WHITELIST=/crowdsec/whitelist.yaml
+      - TRAEFIK_DYNAMIC=/traefik/dynamic.yml
+      - TELEGRAM_BOT_TOKEN=dev
+      - TELEGRAM_CHAT_ID=dev
+      - TELEGRAM_API_URL=http://telegram-mock:8081
+    volumes:
+      - logs:/logs:ro
+      - ./config:/config:ro
+      - ./crowdsec:/crowdsec:ro
+      - ./traefik:/traefik:ro
+      - geo:/geo:ro
+      - state:/state
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    depends_on:
+      loggen:
+        condition: service_started
+      geo:
+        condition: service_completed_successfully
+      crowdsec-init:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  # README screenshots: `make screenshots` (writes docs/screenshots/).
+  screenshots:
+    image: mcr.microsoft.com/playwright:v1.49.1-noble
+    profiles: [screenshots]
+    working_dir: /work
+    command: ["sh", "-c", "npm install --no-save --no-audit --no-fund playwright@1.49.1 >/dev/null && node shoot.mjs"]
+    environment:
+      - DASHBOARD_URL=http://traefik-dashboard:8080
+      - OUT=/out
+    volumes:
+      - ./screenshots:/work
+      - ../docs/screenshots:/out
+    depends_on:
+      - traefik-dashboard
+
+volumes:
+  logs:
+  geo:
+  state:
+  crowdsec-config:
+  crowdsec-data:

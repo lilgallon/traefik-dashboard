@@ -1,0 +1,10 @@
+# Outils de l'environnement local : générateur de logs et faux Telegram.
+FROM golang:1.27.4-alpine AS build
+WORKDIR /src
+COPY go.mod go.sum ./
+COPY dev ./dev
+RUN CGO_ENABLED=0 go build -o /out/loggen ./dev/loggen && \
+    CGO_ENABLED=0 go build -o /out/telegram-mock ./dev/telegram-mock
+
+FROM alpine:3.24.4
+COPY --from=build /out/ /usr/local/bin/

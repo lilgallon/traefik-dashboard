@@ -153,7 +153,7 @@ func main() {
 	// ── Alertes ─────────────────────────────────────────────────────────────────
 	var notifier alert.Notifier
 	if tgToken != "" && tgChat != "" {
-		notifier = alert.NewAsync(alert.NewTelegram(tgToken, tgChat), log.Printf)
+		notifier = alert.NewAsync(alert.NewTelegram(tgToken, tgChat).WithBaseURL(os.Getenv("TELEGRAM_API_URL")), log.Printf)
 	} else {
 		notifier = alert.Log{Logf: log.Printf}
 		shared.fixed = append(shared.fixed, "Telegram n'est pas configuré (TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID) : aucune alerte ne part.")

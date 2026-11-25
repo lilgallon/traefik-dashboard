@@ -1,0 +1,9 @@
+# Extrait de configuration dynamique Traefik : seul le middleware « partners »
+# compte ici (liste « partners » de dev/config/names.yaml).
+http:
+  middlewares:
+    partners:
+      ipAllowList:
+        sourceRange:
+          - 81.2.69.142/32
+          - 89.160.20.112/28

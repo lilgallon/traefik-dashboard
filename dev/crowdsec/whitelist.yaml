@@ -1,0 +1,13 @@
+# Whitelist CrowdSec de l'environnement local : doit correspondre à la liste
+# « crowdsec » de dev/config/names.yaml (contrôlé par le tableau de bord).
+name: dev/whitelist
+description: "Environnement local"
+whitelist:
+  reason: "IP de confiance"
+  ip:
+    - "81.2.69.142"
+  cidr:
+    - "10.0.0.0/8"
+    - "172.16.0.0/12"
+    - "192.168.0.0/16"
+    - "89.160.20.112/28"
